@@ -3,9 +3,11 @@ import { getToken, clearAuth } from './auth';
 import toast from 'react-hot-toast';
 
 // Create axios instance with default configuration
+// In production, use relative URL (same origin) or environment variable
+// In development, use localhost
 const api = axios.create({ 
   baseURL: process.env.NODE_ENV === 'production' 
-    ? process.env.REACT_APP_API_URL || 'https://electricity-record-api.onrender.com'
+    ? process.env.REACT_APP_API_URL || '' // Empty string = same origin (relative URL)
     : 'http://localhost:5000',
   timeout: 30000, // 30 seconds timeout
   headers: {

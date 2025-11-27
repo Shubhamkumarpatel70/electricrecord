@@ -22,7 +22,10 @@ export default function PaymentModal({ open, onClose, record, upiId, onPaymentSu
       const formData = new FormData();
       formData.append('paymentScreenshot', screenshot);
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/records/${record._id}/submit-payment`, {
+      const apiUrl = process.env.NODE_ENV === 'production' 
+        ? (process.env.REACT_APP_API_URL || '') 
+        : 'http://localhost:5000';
+      const response = await fetch(`${apiUrl}/api/records/${record._id}/submit-payment`, {
         method: 'POST',
         body: formData
       });

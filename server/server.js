@@ -26,8 +26,10 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
       imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https:", "http:"],
+      fontSrc: ["'self'", "data:"],
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -125,21 +127,8 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Root route
-app.get('/', (req, res) => {
-  res.json({
-    message: 'Electricity Record API',
-    version: '1.0.0',
-    endpoints: {
-      health: '/api/health',
-      status: '/api/status',
-      auth: '/api/auth',
-      records: '/api/records',
-      admin: '/api/admin'
-    },
-    documentation: 'Check README.md for API documentation'
-  });
-});
+// Root route - only show API info in development when React app is not built
+// In production, this will be handled by React app serving below
 
 // API Routes
 app.use('/api/auth', require('./routes/auth'));

@@ -31,7 +31,10 @@ export default function ShareView() {
     setError('');
     try {
       // Use direct fetch for public route (no auth token needed)
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/customers/share/${token}/verify`, {
+      const apiUrl = process.env.NODE_ENV === 'production' 
+        ? (process.env.REACT_APP_API_URL || '') 
+        : 'http://localhost:5000';
+      const response = await fetch(`${apiUrl}/api/customers/share/${token}/verify`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -574,7 +577,10 @@ export default function ShareView() {
                                         const formData = new FormData();
                                         formData.append('paymentScreenshot', file);
 
-                                        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/records/${recordId}/submit-payment`, {
+                                        const apiUrl = process.env.NODE_ENV === 'production' 
+                                          ? (process.env.REACT_APP_API_URL || '') 
+                                          : 'http://localhost:5000';
+                                        const response = await fetch(`${apiUrl}/api/records/${recordId}/submit-payment`, {
                                           method: 'POST',
                                           body: formData
                                         });
