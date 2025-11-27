@@ -23,7 +23,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prepare": "husky install"
+    "prepare": "node -e \"if (process.env.NODE_ENV === 'production' || !require('fs').existsSync('node_modules/husky')) process.exit(0); require('husky').install();\" || exit 0"
   },
   "keywords": [
     "electricity",
