@@ -53,9 +53,11 @@ app.use(compression());
 app.use(cors({
   origin: isProduction 
     ? [
+        process.env.FRONTEND_URL,
+        process.env.RENDER_EXTERNAL_URL,
+        'https://electricity-record-app.onrender.com',
         'https://electricity-record-frontend.onrender.com', 
-        'https://electricity-record.onrender.com',
-        process.env.FRONTEND_URL
+        'https://electricity-record.onrender.com'
       ].filter(Boolean)
     : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5001'],
   credentials: true,
