@@ -708,7 +708,7 @@ export default function ShareView() {
                   </div>
                   <div style={{ padding: '20px', textAlign: 'center' }}>
                     <img
-                      src={`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}${imageModal.imageUrl}`}
+                      src={`${process.env.NODE_ENV === 'production' ? (process.env.REACT_APP_API_URL || '') : 'http://localhost:5000'}${imageModal.imageUrl}`}
                       alt="Payment screenshot"
                       style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: '8px' }}
                     />
