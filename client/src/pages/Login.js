@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { storeAuth } from '../utils/auth';
 
@@ -7,6 +8,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const [welcomeMessage, setWelcomeMessage] = useState('');
   const navigate = useNavigate();
@@ -23,19 +25,51 @@ export default function Login() {
   const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setFieldErrors({});
     setLoading(true);
     
     try {
-      const { data } = await api.post('/api/auth/login', { email, password });
-      storeAuth(data.token, data.user);
+      const response = await api.post('/api/auth/login', { email, password });
+      const data = response.data;
       
-      // Show success message before redirecting
-      setTimeout(() => {
-        if (data.user.role === 'admin') navigate('/admin');
-        else navigate('/dashboard');
-      }, 1000);
+      // Check if response has the expected structure
+      if (data.success && data.data) {
+        storeAuth(data.data.token, data.data.user);
+        
+        toast.success(`Welcome back, ${data.data.user.name}!`);
+        
+        // Redirect to dashboard (or admin dashboard for admins)
+        setTimeout(() => {
+          if (data.data.user.role === 'admin') {
+            navigate('/admin');
+          } else {
+            navigate('/dashboard');
+          }
+        }, 1000);
+      } else {
+        // Handle unexpected response structure
+        throw new Error('Invalid response from server');
+      }
     } catch (err) {
-      setError(err.response?.data?.message || 'Login failed');
+      const response = err.response?.data;
+      let errorMsg = 'Login failed';
+      
+      // Handle validation errors
+      if (response?.errors && Array.isArray(response.errors)) {
+        const errors = {};
+        response.errors.forEach(err => {
+          errors[err.field] = err.message;
+        });
+        setFieldErrors(errors);
+        errorMsg = response.errors.map(e => e.message).join(', ');
+      } else if (response?.message) {
+        errorMsg = response.message;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
+      setError(errorMsg);
+      toast.error(errorMsg);
       setLoading(false);
     }
   };
@@ -74,10 +108,19 @@ export default function Login() {
                 id="email"
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (fieldErrors.email) {
+                    setFieldErrors({ ...fieldErrors, email: '' });
+                  }
+                }}
                 placeholder="Enter your email"
                 required
+                className={fieldErrors.email ? 'input-error' : ''}
               />
+              {fieldErrors.email && (
+                <span className="field-error">{fieldErrors.email}</span>
+              )}
             </div>
           </div>
 
@@ -89,10 +132,19 @@ export default function Login() {
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (fieldErrors.password) {
+                    setFieldErrors({ ...fieldErrors, password: '' });
+                  }
+                }}
                 placeholder="Enter your password"
                 required
+                className={fieldErrors.password ? 'input-error' : ''}
               />
+              {fieldErrors.password && (
+                <span className="field-error">{fieldErrors.password}</span>
+              )}
             </div>
           </div>
 

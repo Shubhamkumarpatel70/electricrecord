@@ -1,34 +1,88 @@
 {
   "name": "electricity-record-app",
   "version": "1.0.0",
-  "description": "MERN Stack Electricity Record Management System",
-  "main": "server.js",
+  "description": "Professional MERN Stack Electricity Record Management System with PWA support",
+  "main": "server/server.js",
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
   "scripts": {
-    "start": "node server.js",
-    "server": "nodemon server.js",
+    "start": "node server/server.js",
+    "server": "nodemon server/server.js",
     "client": "cd client && npm start",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
     "build": "cd client && npm run build",
     "install-client": "cd client && npm install",
-    "seed": "node scripts/seedAdmin.js",
+    "seed": "node server/scripts/seedAdmin.js",
     "heroku-postbuild": "npm run install-client && npm run build",
-    "render-postbuild": "npm run install-client && npm run build"
+    "render-postbuild": "npm run install-client && npm run build",
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix",
+    "format": "prettier --write \"**/*.{js,json,md}\"",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "prepare": "husky install"
   },
-  "keywords": ["electricity", "record", "mern", "react", "node"],
-  "author": "Your Name",
+  "keywords": [
+    "electricity",
+    "record",
+    "management",
+    "mern",
+    "react",
+    "node",
+    "mongodb",
+    "pwa",
+    "dashboard",
+    "billing"
+  ],
+  "author": "Shubham Kumar Patel",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Shubhamkumarpatel70/electricrecord.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Shubhamkumarpatel70/electricrecord/issues"
+  },
+  "homepage": "https://github.com/Shubhamkumarpatel70/electricrecord#readme",
   "dependencies": {
-    "express": "^4.18.2",
-    "mongoose": "^7.5.0",
+    "axios": "^1.11.0",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2",
-    "multer": "^1.4.5-lts.1",
+    "compression": "^1.7.4",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "express-validator": "^7.0.1"
+    "express": "^4.18.2",
+    "express-mongo-sanitize": "^2.2.0",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "helmet": "^7.1.0",
+    "hpp": "^0.2.3",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^7.5.0",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1"
   },
   "devDependencies": {
+    "concurrently": "^8.2.0",
+    "eslint": "^8.55.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-node": "^11.1.0",
+    "husky": "^8.0.3",
+    "jest": "^29.7.0",
+    "lint-staged": "^15.2.0",
     "nodemon": "^3.0.1",
-    "concurrently": "^8.2.0"
+    "prettier": "^3.1.0",
+    "supertest": "^6.3.3"
+  },
+  "lint-staged": {
+    "*.js": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   }
-} 
+}

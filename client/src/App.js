@@ -1,10 +1,11 @@
 import React from 'react';
-import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import Welcome from './pages/Welcome';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import UserDashboard from './pages/UserDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import ShareView from './pages/ShareView';
 import InstallPrompt from './components/InstallPrompt';
 import { getStoredUser, clearAuth } from './utils/auth';
 
@@ -35,7 +36,10 @@ function Header() {
               </div>
               <button 
                 className="logout-btn" 
-                onClick={() => { clearAuth(); navigate('/'); }}
+                onClick={() => { 
+                  clearAuth(); 
+                  navigate('/');
+                }}
                 title="Sign out"
               >
                 <span className="btn-icon">🚪</span>
@@ -60,20 +64,28 @@ function Header() {
   );
 }
 
-export default function App() {
+function AppContent() {
+  const location = useLocation();
+  const isSharePage = location.pathname.startsWith('/share/');
+
   return (
     <>
-      <Header />
-      <div className="container">
+      {!isSharePage && <Header />}
+      <div className={isSharePage ? '' : 'container'}>
         <Routes>
           <Route path="/" element={<Welcome />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<UserDashboard />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/share/:token" element={<ShareView />} />
         </Routes>
       </div>
-      <InstallPrompt />
+      {!isSharePage && <InstallPrompt />}
     </>
   );
+}
+
+export default function App() {
+  return <AppContent />;
 } 

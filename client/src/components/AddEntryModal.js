@@ -1,36 +1,57 @@
 import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import api from '../utils/api';
 
-export default function AddEntryModal({ open, onClose, onCreated }) {
-  const [previous, setPrevious] = useState(0);
+export default function AddEntryModal({ open, onClose, onCreated, customers = [] }) {
+  const [previous, setPrevious] = useState('');
   const [current, setCurrent] = useState('');
   const [ratePerUnit, setRatePerUnit] = useState('8');
   const [dueDate, setDueDate] = useState('');
   const [remarks, setRemarks] = useState('');
   const [file, setFile] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState('pending');
+  const [selectedCustomer, setSelectedCustomer] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasPreviousRecord, setHasPreviousRecord] = useState(false);
 
   useEffect(() => {
     if (open) {
       setError('');
       setLoading(true);
-      api.get('/api/records/last')
+      setPrevious('');
+      setCurrent('');
+      setHasPreviousRecord(false);
+      const url = selectedCustomer 
+        ? `/api/records/last?customerId=${selectedCustomer}`
+        : '/api/records/last';
+      api.get(url)
         .then(({ data }) => {
-          setPrevious(data?.currentReading || 0);
+          if (data && data.currentReading) {
+            setPrevious(data.currentReading.toString());
+            setHasPreviousRecord(true);
+          } else {
+            setPrevious('');
+            setHasPreviousRecord(false);
+          }
         })
         .catch((err) => {
           console.error('Error fetching last record:', err);
-          setError('Failed to fetch previous reading');
+          setPrevious('');
+          setHasPreviousRecord(false);
         })
         .finally(() => {
           setLoading(false);
         });
     }
-  }, [open]);
+  }, [open, selectedCustomer]);
 
   const validateForm = () => {
-    if (!current || current <= 0) {
+    if (!previous || previous === '' || Number(previous) < 0) {
+      setError('Previous reading is required and must be 0 or greater');
+      return false;
+    }
+    if (!current || current === '' || Number(current) <= 0) {
       setError('Current reading must be greater than 0');
       return false;
     }
@@ -57,9 +78,12 @@ export default function AddEntryModal({ open, onClose, onCreated }) {
     try {
       const form = new FormData();
       form.append('currentReading', current);
+      form.append('previousReading', previous); // Send previous reading manually
       form.append('ratePerUnit', ratePerUnit);
       form.append('dueDate', dueDate);
       form.append('remarks', remarks);
+      form.append('paymentStatus', paymentStatus);
+      if (selectedCustomer) form.append('customerId', selectedCustomer);
       if (file) form.append('billImage', file);
       
       console.log('Submitting form data:', {
@@ -77,13 +101,20 @@ export default function AddEntryModal({ open, onClose, onCreated }) {
       console.log('Record created successfully:', data);
       onCreated(data);
       onClose();
+      setPrevious('');
       setCurrent(''); 
       setDueDate(''); 
       setRemarks(''); 
       setFile(null);
+      setPaymentStatus('pending');
+      setSelectedCustomer('');
+      setHasPreviousRecord(false);
+      toast.success('Entry created successfully!');
     } catch (err) {
       console.error('Error creating record:', err);
-      setError(err.response?.data?.message || 'Failed to create record');
+      const errorMsg = err.response?.data?.message || 'Failed to create record';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -99,17 +130,62 @@ export default function AddEntryModal({ open, onClose, onCreated }) {
         </div>
         
         <form onSubmit={submit} className="entry-form">
+          {customers.length > 0 && (
+            <div className="form-group">
+              <label>Customer (Optional - Leave empty for self)</label>
+              <div className="input-wrapper">
+                <span className="input-icon">👤</span>
+                <select
+                  value={selectedCustomer}
+                  onChange={(e) => {
+                    setSelectedCustomer(e.target.value);
+                    setPrevious('');
+                    setHasPreviousRecord(false);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    background: 'white'
+                  }}
+                >
+                  <option value="">Self</option>
+                  {customers.map(c => (
+                    <option key={c._id} value={c._id}>
+                      {c.name} ({c.meterNumber})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
           <div className="form-row">
             <div className="form-group">
-              <label>Previous Reading</label>
+              <label>Previous Reading {hasPreviousRecord && '(Auto-filled - You can edit)'}</label>
               <div className="input-wrapper">
                 <span className="input-icon">🔢</span>
                 <input 
+                  type="number"
                   value={previous} 
-                  disabled 
-                  className="disabled-input"
+                  onChange={(e) => setPrevious(e.target.value)}
+                  className={hasPreviousRecord ? '' : ''}
+                  placeholder="Enter previous reading"
+                  min="0"
+                  required
                 />
               </div>
+              {hasPreviousRecord && (
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                  Auto-filled from last record. You can edit if needed.
+                </div>
+              )}
+              {!hasPreviousRecord && (
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                  No previous record found. Please enter manually.
+                </div>
+              )}
             </div>
             <div className="form-group">
               <label>Current Reading</label>
@@ -118,9 +194,12 @@ export default function AddEntryModal({ open, onClose, onCreated }) {
                 <input 
                   type="number" 
                   value={current} 
-                  onChange={(e) => setCurrent(e.target.value)} 
+                  onChange={(e) => {
+                    setCurrent(e.target.value);
+                    setError(''); // Clear error when user types
+                  }} 
                   required 
-                  min={previous + 1}
+                  min={previous ? Number(previous) + 1 : undefined}
                   placeholder="Enter current reading"
                 />
               </div>
@@ -183,6 +262,28 @@ export default function AddEntryModal({ open, onClose, onCreated }) {
                 onChange={(e) => setRemarks(e.target.value)} 
                 placeholder="Any additional notes..."
               />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Payment Status</label>
+            <div className="payment-status-buttons">
+              <button
+                type="button"
+                onClick={() => setPaymentStatus('paid')}
+                className={`payment-status-btn paid ${paymentStatus === 'paid' ? 'active' : ''}`}
+              >
+                <span>✅</span>
+                Paid
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentStatus('pending')}
+                className={`payment-status-btn pending ${paymentStatus === 'pending' ? 'active' : ''}`}
+              >
+                <span>⏳</span>
+                Unpaid
+              </button>
             </div>
           </div>
 

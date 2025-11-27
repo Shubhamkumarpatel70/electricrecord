@@ -1,10 +1,10 @@
 services:
-  # Backend API Service
+  # Combined Web Service (Client + Server)
   - type: web
-    name: electricity-record-api
+    name: electricity-record-app
     env: node
     plan: starter
-    buildCommand: npm install
+    buildCommand: npm install && npm run install-client && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -17,17 +17,6 @@ services:
         value: admin@power.local
       - key: ADMIN_PASSWORD
         value: Admin@1234
+      - key: PORT
+        value: 10000
     healthCheckPath: /api/health
-
-  # Frontend Static Site
-  - type: static
-    name: electricity-record-frontend
-    plan: starter
-    buildCommand: |
-      cd client
-      npm install
-      npm run build
-    staticPublishPath: client/build
-    envVars:
-      - key: REACT_APP_API_URL
-        value: https://electricity-record-api.onrender.com
