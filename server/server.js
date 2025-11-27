@@ -27,12 +27,15 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      imgSrc: ["'self'", "data:", "https:"],
+      imgSrc: isProduction 
+        ? ["'self'", "data:", "https:"]
+        : ["'self'", "data:", "https:", "http://localhost:5000", "http://localhost:3000"],
       connectSrc: ["'self'", "https:", "http:"],
       fontSrc: ["'self'", "data:"],
     },
   },
   crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // Allow images to be loaded cross-origin
 }));
 
 // Rate limiting
@@ -82,9 +85,43 @@ app.use((req, res, next) => {
 });
 
 // Serve static files from uploads directory (inside server/uploads)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+// Add CORS headers for cross-origin image requests
+app.use('/uploads', (req, res, next) => {
+  // Set CORS headers for image requests
+  const allowedOrigins = isProduction 
+    ? [
+        process.env.FRONTEND_URL,
+        process.env.RENDER_EXTERNAL_URL,
+        'https://electricity-record-app.onrender.com',
+        'https://electricity-record-frontend.onrender.com', 
+        'https://electricity-record.onrender.com'
+      ].filter(Boolean)
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:5001', 'http://localhost:5000'];
+  
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  }
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  
+  next();
+}, express.static(path.join(__dirname, 'uploads'), {
   maxAge: isProduction ? '1d' : 0,
-  etag: true
+  etag: true,
+  setHeaders: (res, filePath) => {
+    // Set additional headers for images
+    if (filePath.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+      res.setHeader('Content-Type', `image/${filePath.split('.').pop()}`);
+      res.setHeader('Cache-Control', isProduction ? 'public, max-age=86400' : 'no-cache');
+    }
+  }
 }));
 
 // Database connection with better error handling

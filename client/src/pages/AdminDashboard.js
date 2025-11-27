@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, Legend } from 'recharts';
+import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid } from 'recharts';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { getStoredUser, getToken } from '../utils/auth';
@@ -250,11 +250,25 @@ export default function AdminDashboard() {
     toast.success('Records exported successfully!');
   };
 
-  const openImageModal = (imageUrl, userName, meterNumber) => {
+  const getImageUrl = (imageUrl) => {
+    if (!imageUrl) return null;
+    if (imageUrl.startsWith('http') || imageUrl.startsWith('data:')) {
+      return imageUrl;
+    }
+    const apiUrl = process.env.NODE_ENV === 'production' 
+      ? (process.env.REACT_APP_API_URL || '') 
+      : 'http://localhost:5000';
+    return `${apiUrl}${imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`}`;
+  };
+
+  const openImageModal = (imageUrl, userName, meterNumber, imageType = 'Bill') => {
+    const fullImageUrl = getImageUrl(imageUrl);
+    if (!fullImageUrl) return;
+    
     setImageModal({
       open: true,
-      imageUrl,
-      imageAlt: `Bill image for ${userName} (${meterNumber})`
+      imageUrl: fullImageUrl,
+      imageAlt: `${imageType} image for ${userName} (${meterNumber})`
     });
     setImageLoading(true);
   };
@@ -675,17 +689,108 @@ export default function AdminDashboard() {
                   {r.remarks || '-'}
                 </td>
                 <td>
-                  {r.billImage ? (
-                    <button 
-                      className="view-bill-btn" 
-                      onClick={() => openImageModal(r.billImage, r.user?.name, r.user?.meterNumber)}
-                      title="Click to view bill image"
-                    >
-                      <span className="btn-icon">📷</span>
-                      View
-                    </button>
+                  {(r.billImage || r.paymentScreenshot) ? (
+                    <div className="flex flex-col gap-2">
+                      {/* Bill Image */}
+                      {r.billImage && (
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="relative group cursor-pointer"
+                            onClick={() => openImageModal(r.billImage, r.user?.name, r.user?.meterNumber, 'Bill')}
+                            title="Click to view bill image"
+                          >
+                            <div className="relative">
+                              <img 
+                                src={getImageUrl(r.billImage)} 
+                                alt="Bill thumbnail"
+                                className="w-16 h-16 object-cover rounded-lg border-2 shadow-md hover:shadow-lg transition-all group-hover:scale-105"
+                                style={{ borderColor: '#87CEEB' }}
+                                crossOrigin="anonymous"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  if (e.target.nextSibling) {
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }
+                                }}
+                              />
+                              <div 
+                                className="hidden w-16 h-16 rounded-lg border-2 items-center justify-center text-2xl"
+                                style={{ borderColor: '#87CEEB', backgroundColor: '#F5F5F5' }}
+                              >
+                                📷
+                              </div>
+                              <div className="absolute top-0 left-0 px-1.5 py-0.5 rounded-br-lg text-xs font-semibold text-white" style={{ backgroundColor: '#87CEEB' }}>
+                                Bill
+                              </div>
+                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-all flex items-center justify-center">
+                                <span className="text-white text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                                  View
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <button 
+                            className="px-2 py-1 rounded text-xs font-semibold hover:shadow-md transition-all"
+                            style={{ backgroundColor: '#87CEEB', color: 'white' }}
+                            onClick={() => openImageModal(r.billImage, r.user?.name, r.user?.meterNumber, 'Bill')}
+                            title="View bill image"
+                          >
+                            View
+                          </button>
+                        </div>
+                      )}
+                      
+                      {/* Payment Screenshot */}
+                      {r.paymentScreenshot && (
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="relative group cursor-pointer"
+                            onClick={() => openImageModal(r.paymentScreenshot, r.user?.name, r.user?.meterNumber, 'Payment')}
+                            title="Click to view payment screenshot"
+                          >
+                            <div className="relative">
+                              <img 
+                                src={getImageUrl(r.paymentScreenshot)} 
+                                alt="Payment screenshot thumbnail"
+                                className="w-16 h-16 object-cover rounded-lg border-2 shadow-md hover:shadow-lg transition-all group-hover:scale-105"
+                                style={{ borderColor: '#4CAF50' }}
+                                crossOrigin="anonymous"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  if (e.target.nextSibling) {
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }
+                                }}
+                              />
+                              <div 
+                                className="hidden w-16 h-16 rounded-lg border-2 items-center justify-center text-2xl"
+                                style={{ borderColor: '#4CAF50', backgroundColor: '#F5F5F5' }}
+                              >
+                                💳
+                              </div>
+                              <div className="absolute top-0 left-0 px-1.5 py-0.5 rounded-br-lg text-xs font-semibold text-white" style={{ backgroundColor: '#4CAF50' }}>
+                                Payment
+                              </div>
+                              <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 rounded-lg transition-all flex items-center justify-center">
+                                <span className="text-white text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                                  View
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <button 
+                            className="px-2 py-1 rounded text-xs font-semibold hover:shadow-md transition-all"
+                            style={{ backgroundColor: '#4CAF50', color: 'white' }}
+                            onClick={() => openImageModal(r.paymentScreenshot, r.user?.name, r.user?.meterNumber, 'Payment')}
+                            title="View payment screenshot"
+                          >
+                            View
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ) : (
-                    <span style={{ color: '#999' }}>No image</span>
+                    <span className="text-sm" style={{ color: '#999' }}>No image</span>
                   )}
                 </td>
                 <td>
@@ -910,7 +1015,7 @@ export default function AdminDashboard() {
         <div className="modal" onClick={closeImageModal}>
           <div className="modal-content image-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Bill Image</h3>
+              <h3>{imageModal.imageAlt?.includes('Payment') ? 'Payment Screenshot' : 'Bill Image'}</h3>
               <button className="close-btn" onClick={closeImageModal}>×</button>
             </div>
             <div className="modal-body">
@@ -924,6 +1029,7 @@ export default function AdminDashboard() {
                 src={imageModal.imageUrl} 
                 alt={imageModal.imageAlt}
                 style={{ display: imageLoading ? 'none' : 'block' }}
+                crossOrigin="anonymous"
                 onLoad={() => setImageLoading(false)}
                 onError={(e) => {
                   setImageLoading(false);

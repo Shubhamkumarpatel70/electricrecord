@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
-import { storeAuth } from '../utils/auth';
 
 export default function Register() {
   const [form, setForm] = useState({ 
@@ -20,7 +19,6 @@ export default function Register() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Get welcome message from session storage
     const message = sessionStorage.getItem('welcomeMessage');
     if (message) {
       setWelcomeMessage(message);
@@ -31,7 +29,6 @@ export default function Register() {
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm({ ...form, [name]: value });
-    // Clear error for this field when user starts typing
     if (fieldErrors[name]) {
       setFieldErrors({ ...fieldErrors, [name]: '' });
     }
@@ -44,29 +41,20 @@ export default function Register() {
     setLoading(true);
     
     try {
-      const { data } = await api.post('/api/auth/register', form);
-      
-      // Don't auto-login after registration - user must login manually
-      // storeAuth(data.token, data.user); // Removed - user should login manually
-      
+      await api.post('/api/auth/register', form);
       toast.success(`Account created successfully! Please login to continue.`);
-      
-      // Redirect to login page after registration
       setTimeout(() => {
         navigate('/login');
       }, 1500);
     } catch (err) {
       const response = err.response?.data;
       
-      // Handle validation errors
       if (response?.errors && Array.isArray(response.errors)) {
         const errors = {};
         response.errors.forEach(err => {
           errors[err.field] = err.message;
         });
         setFieldErrors(errors);
-        
-        // Show first error in toast
         const firstError = response.errors[0];
         toast.error(`${firstError.field}: ${firstError.message}`);
       } else {
@@ -74,42 +62,43 @@ export default function Register() {
         setError(errorMsg);
         toast.error(errorMsg);
       }
-      
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-container">
+    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 overflow-y-auto py-8" style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}>
       {welcomeMessage && (
-        <div className="welcome-message">
-          <div className="welcome-content">
-            <div className="welcome-icon">✨</div>
-            <h3>{welcomeMessage}</h3>
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-white rounded-xl shadow-xl p-4 animate-slide-in-right max-w-sm w-full mx-4">
+          <div className="flex items-center gap-3">
+            <div className="text-3xl">✨</div>
+            <h3 className="font-semibold text-gray-800">{welcomeMessage}</h3>
           </div>
         </div>
       )}
 
-      <div className="auth-card">
-        <div className="auth-header">
-          <div className="auth-logo">⚡</div>
-          <h2>Create Account</h2>
-          <p>Join Electricity Record to manage your electricity usage</p>
+      <div className="w-full max-w-2xl rounded-2xl shadow-2xl p-6 sm:p-8 my-8" style={{ backgroundColor: '#F5F5F5' }}>
+        <div className="text-center mb-8">
+          <div className="text-5xl sm:text-6xl mb-4">⚡</div>
+          <h2 className="text-2xl sm:text-3xl font-bold mb-2" style={{ color: '#37474F' }}>Create Account</h2>
+          <p className="text-sm sm:text-base" style={{ color: '#37474F', opacity: 0.8 }}>Join Electricity Record to manage your electricity usage</p>
         </div>
 
         {error && (
-          <div className="error-message">
-            <span className="error-icon">⚠️</span>
-            {error}
+          <div className="mb-4 p-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-center gap-2">
+            <span className="text-xl">⚠️</span>
+            <span className="text-red-700 text-sm">{error}</span>
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="auth-form">
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="name">Full Name</label>
-              <div className="input-wrapper">
-                <span className="input-icon">👤</span>
+        <form onSubmit={onSubmit} className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+                Full Name
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">👤</span>
                 <input
                   id="name"
                   name="name"
@@ -118,18 +107,24 @@ export default function Register() {
                   onChange={onChange}
                   placeholder="Enter your full name"
                   required
-                  className={fieldErrors.name ? 'input-error' : ''}
+                  className={`w-full pl-11 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    fieldErrors.name 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-200' 
+                      : 'border-gray-200 focus:border-primary focus:ring-primary/20'
+                  }`}
                 />
-                {fieldErrors.name && (
-                  <span className="field-error">{fieldErrors.name}</span>
-                )}
               </div>
+              {fieldErrors.name && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.name}</p>
+              )}
             </div>
 
-            <div className="form-group">
-              <label htmlFor="email">Email Address</label>
-              <div className="input-wrapper">
-                <span className="input-icon">📧</span>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">📧</span>
                 <input
                   id="email"
                   name="email"
@@ -138,116 +133,150 @@ export default function Register() {
                   onChange={onChange}
                   placeholder="Enter your email"
                   required
-                  className={fieldErrors.email ? 'input-error' : ''}
+                  className={`w-full pl-11 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    fieldErrors.email 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-200' 
+                      : 'border-gray-200 focus:border-primary focus:ring-primary/20'
+                  }`}
                 />
-                {fieldErrors.email && (
-                  <span className="field-error">{fieldErrors.email}</span>
-                )}
               </div>
+              {fieldErrors.email && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.email}</p>
+              )}
             </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <div className="input-wrapper">
-              <span className="input-icon">🔒</span>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  value={form.password}
-                  onChange={onChange}
-                  placeholder="Create a strong password (min 8 chars, uppercase, lowercase, number, special char)"
-                  required
-                  className={fieldErrors.password ? 'input-error' : ''}
-                />
-                {fieldErrors.password && (
-                  <span className="field-error">{fieldErrors.password}</span>
-                )}
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+              Password
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">🔒</span>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={onChange}
+                placeholder="Create a strong password"
+                required
+                className={`w-full pl-11 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                  fieldErrors.password 
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-200' 
+                    : 'border-gray-200 focus:border-primary focus:ring-primary/20'
+                }`}
+              />
             </div>
+            {fieldErrors.password && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.password}</p>
+            )}
+            <p className="mt-1 text-xs text-gray-500">Min 8 chars, uppercase, lowercase, number, special char</p>
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="meterNumber">Meter Number</label>
-              <div className="input-wrapper">
-                <span className="input-icon">🔢</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="meterNumber" className="block text-sm font-medium text-gray-700 mb-2">
+                Meter Number
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">🔢</span>
                 <input
                   id="meterNumber"
                   name="meterNumber"
                   type="text"
                   value={form.meterNumber}
                   onChange={onChange}
-                  placeholder="Enter meter number (6-12 alphanumeric)"
+                  placeholder="Enter meter number"
                   required
-                  className={fieldErrors.meterNumber ? 'input-error' : ''}
+                  className={`w-full pl-11 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    fieldErrors.meterNumber 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-200' 
+                      : 'border-gray-200 focus:border-primary focus:ring-primary/20'
+                  }`}
                 />
-                {fieldErrors.meterNumber && (
-                  <span className="field-error">{fieldErrors.meterNumber}</span>
-                )}
               </div>
+              {fieldErrors.meterNumber && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.meterNumber}</p>
+              )}
             </div>
 
-            <div className="form-group">
-              <label htmlFor="phone">Phone Number</label>
-              <div className="input-wrapper">
-                <span className="input-icon">📱</span>
+            <div>
+              <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                Phone Number
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">📱</span>
                 <input
                   id="phone"
                   name="phone"
                   type="tel"
                   value={form.phone}
                   onChange={onChange}
-                  placeholder="Enter phone number (8-15 digits)"
+                  placeholder="Enter phone number"
                   required
-                  className={fieldErrors.phone ? 'input-error' : ''}
+                  className={`w-full pl-11 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    fieldErrors.phone 
+                      ? 'border-red-500 focus:border-red-500 focus:ring-red-200' 
+                      : 'border-gray-200 focus:border-primary focus:ring-primary/20'
+                  }`}
                 />
-                {fieldErrors.phone && (
-                  <span className="field-error">{fieldErrors.phone}</span>
-                )}
               </div>
+              {fieldErrors.phone && (
+                <p className="mt-1 text-sm text-red-600">{fieldErrors.phone}</p>
+              )}
             </div>
           </div>
 
-          <div className="form-group">
-            <label htmlFor="address">Address</label>
-            <div className="input-wrapper">
-              <span className="input-icon">🏠</span>
-                <input
-                  id="address"
-                  name="address"
-                  type="text"
-                  value={form.address}
-                  onChange={onChange}
-                  placeholder="Enter your address (min 10 characters)"
-                  required
-                  className={fieldErrors.address ? 'input-error' : ''}
-                />
-                {fieldErrors.address && (
-                  <span className="field-error">{fieldErrors.address}</span>
-                )}
+          <div>
+            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
+              Address
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">🏠</span>
+              <input
+                id="address"
+                name="address"
+                type="text"
+                value={form.address}
+                onChange={onChange}
+                placeholder="Enter your address"
+                required
+                className={`w-full pl-11 pr-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                  fieldErrors.address 
+                    ? 'border-red-500 focus:border-red-500 focus:ring-red-200' 
+                    : 'border-gray-200 focus:border-primary focus:ring-primary/20'
+                }`}
+              />
             </div>
+            {fieldErrors.address && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.address}</p>
+            )}
           </div>
 
-          <button type="submit" className="auth-submit" disabled={loading}>
+          <button 
+            type="submit" 
+            className="w-full text-white font-semibold py-3 px-6 rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)' }}
+            disabled={loading}
+          >
             {loading ? (
               <>
-                <span className="spinner-small"></span>
-                Creating Account...
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span>Creating Account...</span>
               </>
             ) : (
               <>
-                <span className="btn-icon">✨</span>
-                Create Account
+                <span>✨</span>
+                <span>Create Account</span>
               </>
             )}
           </button>
         </form>
 
-        <div className="auth-footer">
-          <p>
+        <div className="mt-6 text-center">
+          <p className="text-sm" style={{ color: '#37474F' }}>
             Already have an account?{' '}
-            <Link to="/login" className="auth-link">
+            <Link to="/login" className="font-semibold hover:underline" style={{ color: '#87CEEB' }}>
               Sign in here
             </Link>
           </p>
@@ -255,4 +284,4 @@ export default function Register() {
       </div>
     </div>
   );
-} 
+}

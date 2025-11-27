@@ -45,7 +45,7 @@ router.get('/records', adminAuth, async (req, res) => {
 
     const records = await ElectricityRecord.find(query)
       .populate('user', 'name email meterNumber')
-      .select('user previousReading currentReading unitsConsumed totalAmount paymentStatus paymentDate dueDate billImage remarks createdAt')
+      .select('user previousReading currentReading unitsConsumed totalAmount paymentStatus paymentDate dueDate billImage paymentScreenshot paymentSubmittedAt remarks createdAt')
       .sort({ createdAt: -1 });
     res.json(records);
   } catch (err) {

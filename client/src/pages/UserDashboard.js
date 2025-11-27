@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area, Legend } from 'recharts';
 import toast from 'react-hot-toast';
 import api from '../utils/api';
 import { getStoredUser, getToken } from '../utils/auth';
@@ -11,8 +10,8 @@ import ShareCustomerModal from '../components/ShareCustomerModal';
 
 export default function UserDashboard() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('entries'); // 'entries', 'customers', or 'settings'
-  const [user, setUser] = useState(null);
+  const [activeTab, setActiveTab] = useState('entries'); // 'entries', 'customers', 'payments', or 'settings'
+  const [, setUser] = useState(null);
   const [upiId, setUpiId] = useState('');
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [records, setRecords] = useState([]);
@@ -31,6 +30,8 @@ export default function UserDashboard() {
   const [sortBy, setSortBy] = useState('date');
   const [sortOrder, setSortOrder] = useState('desc');
   const [customerFilter, setCustomerFilter] = useState('');
+  const [pendingPayments, setPendingPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -223,9 +224,18 @@ export default function UserDashboard() {
   }, [filteredAndSortedRecords]);
 
   const openImageModal = (imageUrl, date) => {
+    // Ensure image URL includes the full API URL if it's a relative path
+    let fullImageUrl = imageUrl;
+    if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
+      const apiUrl = process.env.NODE_ENV === 'production' 
+        ? (process.env.REACT_APP_API_URL || '') 
+        : 'http://localhost:5000';
+      fullImageUrl = `${apiUrl}${imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`}`;
+    }
+    
     setImageModal({
       open: true,
-      imageUrl,
+      imageUrl: fullImageUrl,
       imageAlt: `Bill image for ${date}`
     });
     setImageLoading(true);
@@ -252,6 +262,64 @@ export default function UserDashboard() {
       console.error('Error updating payment status:', err);
       const errorMsg = err.response?.data?.message || 'Failed to update payment status';
       toast.error(errorMsg);
+    }
+  };
+
+  const loadPendingPayments = () => {
+    setPaymentsLoading(true);
+    api.get('/api/records/pending-payments')
+      .then((response) => {
+        setPendingPayments(response.data);
+      })
+      .catch((err) => {
+        console.error('Error fetching pending payments:', err);
+        toast.error(err.response?.data?.message || 'Failed to fetch pending payments');
+      })
+      .finally(() => {
+        setPaymentsLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    if (activeTab === 'payments') {
+      loadPendingPayments();
+    }
+  }, [activeTab]);
+
+  const handleApprovePayment = async (recordId) => {
+    try {
+      const { data } = await api.put(`/api/records/${recordId}/approve-payment`);
+      toast.success('Payment approved successfully!');
+      // Refresh data
+      loadData();
+      loadPendingPayments();
+      // Update records list
+      setRecords((prev) => prev.map((r) => 
+        r._id === recordId ? data.record : r
+      ));
+    } catch (err) {
+      console.error('Error approving payment:', err);
+      toast.error(err.response?.data?.message || 'Failed to approve payment');
+    }
+  };
+
+  const handleRejectPayment = async (recordId) => {
+    if (!window.confirm('Are you sure you want to reject this payment? The customer will need to submit a new payment screenshot.')) {
+      return;
+    }
+    try {
+      const { data } = await api.put(`/api/records/${recordId}/reject-payment`);
+      toast.success('Payment rejected. Customer can submit a new payment screenshot.');
+      // Refresh data
+      loadData();
+      loadPendingPayments();
+      // Update records list
+      setRecords((prev) => prev.map((r) => 
+        r._id === recordId ? data.record : r
+      ));
+    } catch (err) {
+      console.error('Error rejecting payment:', err);
+      toast.error(err.response?.data?.message || 'Failed to reject payment');
     }
   };
 
@@ -315,455 +383,757 @@ export default function UserDashboard() {
 
   if (loading) {
     return (
-      <div className="dashboard-container">
-        <div className="loading-card">
-          <div className="loading-spinner"></div>
-          <h2>Loading your dashboard...</h2>
+      <div className="min-h-screen bg-gradient-primary flex items-center justify-center p-4">
+        <div className="rounded-2xl shadow-xl p-8 sm:p-12 text-center" style={{ backgroundColor: '#F5F5F5' }}>
+          <div className="w-16 h-16 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: '#87CEEB' }}></div>
+          <h2 className="text-xl sm:text-2xl font-semibold" style={{ color: '#37474F' }}>Loading your dashboard...</h2>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-header">
-        <div className="dashboard-title">
-          <h1>⚡ Electricity Dashboard</h1>
-          <p>Manage your electricity meter readings and bills</p>
+    <div className="min-h-screen p-4 sm:p-6 lg:p-8" style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}>
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="rounded-2xl shadow-xl p-6 sm:p-8 mb-6 backdrop-blur-sm" style={{ backgroundColor: 'rgba(245, 245, 245, 0.95)', border: '1px solid rgba(255, 255, 255, 0.5)' }}>
+          <div>
+            <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold mb-2" style={{ color: '#37474F' }}>
+              ⚡ Electricity Dashboard
+            </h1>
+            <p className="text-sm sm:text-base" style={{ color: '#37474F', opacity: 0.8 }}>Manage your electricity meter readings and bills</p>
+          </div>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="tabs-container" style={{ marginBottom: '24px' }}>
-        <button
-          className={`tab-button ${activeTab === 'entries' ? 'active' : ''}`}
-          onClick={() => setActiveTab('entries')}
-        >
-          📊 View/Add Entry
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'customers' ? 'active' : ''}`}
-          onClick={() => setActiveTab('customers')}
-        >
-          👥 Customers
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
-        >
-          ⚙️ Payment Settings
-        </button>
-      </div>
-
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-2 sm:gap-3 mb-6 rounded-xl p-2 shadow-lg backdrop-blur-sm" style={{ backgroundColor: 'rgba(245, 245, 245, 0.95)' }}>
+          <button
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
+              activeTab === 'entries'
+                ? 'text-white shadow-lg'
+                : ''
+            }`}
+            style={activeTab === 'entries' 
+              ? { background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }
+              : { backgroundColor: '#F5F5F5', color: '#37474F' }
+            }
+            onClick={() => setActiveTab('entries')}
+          >
+            📊 <span className="hidden sm:inline">View/Add Entry</span><span className="sm:hidden">Entry</span>
+          </button>
+          <button
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
+              activeTab === 'customers'
+                ? 'text-white shadow-lg'
+                : ''
+            }`}
+            style={activeTab === 'customers' 
+              ? { background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }
+              : { backgroundColor: '#F5F5F5', color: '#37474F' }
+            }
+            onClick={() => setActiveTab('customers')}
+          >
+            👥 Customers
+          </button>
+          <button
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
+              activeTab === 'payments'
+                ? 'text-white shadow-lg'
+                : ''
+            }`}
+            style={activeTab === 'payments' 
+              ? { background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }
+              : { backgroundColor: '#F5F5F5', color: '#37474F' }
+            }
+            onClick={() => setActiveTab('payments')}
+          >
+            💳 <span className="hidden sm:inline">Payment Requests</span><span className="sm:hidden">Payments</span>
+          </button>
+          <button
+            className={`flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-xs sm:text-sm transition-all ${
+              activeTab === 'settings'
+                ? 'text-white shadow-lg'
+                : ''
+            }`}
+            style={activeTab === 'settings' 
+              ? { background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }
+              : { backgroundColor: '#F5F5F5', color: '#37474F' }
+            }
+            onClick={() => setActiveTab('settings')}
+          >
+            ⚙️ <span className="hidden sm:inline">Payment Settings</span><span className="sm:hidden">Settings</span>
+          </button>
+        </div>
+      
       {error && (
-        <div className="error-message">
-          <span className="error-icon">⚠️</span>
-          {error}
+          <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-lg flex items-center gap-2">
+            <span className="text-xl">⚠️</span>
+            <span className="text-red-700 text-sm sm:text-base">{error}</span>
         </div>
       )}
 
       {activeTab === 'entries' ? (
         <>
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', justifyContent: 'flex-end' }}>
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mb-6 justify-end">
             <button 
-              className="export-btn" 
+              className="text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}
               onClick={exportRecords}
               disabled={filteredAndSortedRecords.length === 0}
             >
-              📥 Export CSV
+              📥 <span>Export CSV</span>
             </button>
-            <button className="add-entry-btn" onClick={() => setOpen(true)}>
-              <span className="btn-icon">➕</span>
-              Add New Entry
+            <button 
+              className="text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 flex items-center justify-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)' }}
+              onClick={() => setOpen(true)}
+            >
+              ➕ <span>Add New Entry</span>
             </button>
           </div>
 
-          <div className="dashboard-stats">
-            <div className="stat-card">
-              <div className="stat-icon">📊</div>
-              <div className="stat-content">
-                <h3>{stats.total}</h3>
-                <p>Total Entries</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+            <div className="rounded-xl p-4 sm:p-6 shadow-lg" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+              <div className="text-3xl sm:text-4xl mb-2">📊</div>
+              <div>
+                <h3 className="text-xl sm:text-2xl font-bold" style={{ color: '#37474F' }}>{stats.total}</h3>
+                <p className="text-xs sm:text-sm mt-1" style={{ color: '#37474F', opacity: 0.7 }}>Total Entries</p>
               </div>
             </div>
-            <div className="stat-card">
-              <div className="stat-icon">💰</div>
-              <div className="stat-content">
-                <h3>₹{stats.totalAmount.toFixed(2)}</h3>
-                <p>Total Amount</p>
+            <div className="rounded-xl p-4 sm:p-6 shadow-lg" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+              <div className="text-3xl sm:text-4xl mb-2">💰</div>
+              <div>
+                <h3 className="text-xl sm:text-2xl font-bold" style={{ color: '#37474F' }}>₹{stats.totalAmount.toFixed(2)}</h3>
+                <p className="text-xs sm:text-sm mt-1" style={{ color: '#37474F', opacity: 0.7 }}>Total Amount</p>
               </div>
             </div>
-            <div className="stat-card">
-              <div className="stat-icon">⚡</div>
-              <div className="stat-content">
-                <h3>{stats.totalUnits}</h3>
-                <p>Total Units</p>
+            <div className="rounded-xl p-4 sm:p-6 shadow-lg" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+              <div className="text-3xl sm:text-4xl mb-2">⚡</div>
+              <div>
+                <h3 className="text-xl sm:text-2xl font-bold" style={{ color: '#37474F' }}>{stats.totalUnits}</h3>
+                <p className="text-xs sm:text-sm mt-1" style={{ color: '#37474F', opacity: 0.7 }}>Total Units</p>
               </div>
             </div>
-            <div className="stat-card">
-              <div className="stat-icon">📈</div>
-              <div className="stat-content">
-                <h3>₹{stats.avgBill.toFixed(2)}</h3>
-                <p>Average Bill</p>
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon">✅</div>
-              <div className="stat-content">
-                <h3>{stats.paid}</h3>
-                <p>Paid ({stats.paidAmount.toFixed(2)})</p>
-              </div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-icon">⏳</div>
-              <div className="stat-content">
-                <h3>{stats.pending}</h3>
-                <p>Pending ({stats.pendingAmount.toFixed(2)})</p>
-              </div>
-            </div>
+            <div className="rounded-xl p-4 sm:p-6 shadow-lg" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+              <div className="text-3xl sm:text-4xl mb-2">📈</div>
+              <div>
+                <h3 className="text-xl sm:text-2xl font-bold" style={{ color: '#37474F' }}>₹{stats.avgBill.toFixed(2)}</h3>
+                <p className="text-xs sm:text-sm mt-1" style={{ color: '#37474F', opacity: 0.7 }}>Average Bill</p>
           </div>
+        </div>
+            <div className="rounded-xl p-4 sm:p-6 shadow-lg" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+              <div className="text-3xl sm:text-4xl mb-2">✅</div>
+              <div>
+                <h3 className="text-xl sm:text-2xl font-bold" style={{ color: '#37474F' }}>{stats.paid}</h3>
+                <p className="text-xs sm:text-sm mt-1" style={{ color: '#37474F', opacity: 0.7 }}>Paid (₹{stats.paidAmount.toFixed(2)})</p>
+          </div>
+        </div>
+            <div className="rounded-xl p-4 sm:p-6 shadow-lg" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+              <div className="text-3xl sm:text-4xl mb-2">⏳</div>
+              <div>
+                <h3 className="text-xl sm:text-2xl font-bold" style={{ color: '#37474F' }}>{stats.pending}</h3>
+                <p className="text-xs sm:text-sm mt-1" style={{ color: '#37474F', opacity: 0.7 }}>Pending (₹{stats.pendingAmount.toFixed(2)})</p>
+          </div>
+        </div>
+      </div>
 
           {/* Filters and Search */}
-          <div className="filters">
-            <div className="filter-group">
-              <label htmlFor="search">🔍 Search:</label>
-              <input
-                id="search"
-                type="text"
-                placeholder="Search by amount, units, remarks, or customer..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{ 
-                  padding: '8px 12px', 
-                  borderRadius: '8px', 
-                  border: '2px solid #e2e8f0',
-                  fontSize: '14px',
-                  minWidth: '250px'
-                }}
-              />
+          <div className="rounded-xl p-4 sm:p-6 shadow-lg mb-6" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-4">
+              <div className="sm:col-span-2 lg:col-span-1">
+                <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
+                  🔍 Search
+                </label>
+                <input
+                  id="search"
+                  type="text"
+                  placeholder="Search records..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="customerFilter" className="block text-sm font-medium text-gray-700 mb-2">
+                  Customer
+                </label>
+                <select 
+                  id="customerFilter"
+                  value={customerFilter} 
+                  onChange={(e) => setCustomerFilter(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm"
+                >
+                  <option value="">All (Self + Customers)</option>
+                  <option value="self">Self Only</option>
+                  {customers.map(c => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="statusFilter" className="block text-sm font-medium text-gray-700 mb-2">
+                  Status
+                </label>
+                <select 
+                  id="statusFilter"
+                  value={statusFilter} 
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="paid">Paid</option>
+                  <option value="pending">Pending</option>
+                  <option value="overdue">Overdue</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="dateFilter" className="block text-sm font-medium text-gray-700 mb-2">
+                  Date Range
+                </label>
+                <select 
+                  id="dateFilter"
+                  value={dateFilter} 
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm"
+                >
+                  <option value="all">All Time</option>
+                  <option value="today">Today</option>
+                  <option value="week">Last 7 Days</option>
+                  <option value="month">Last Month</option>
+                  <option value="year">Last Year</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="sortBy" className="block text-sm font-medium text-gray-700 mb-2">
+                  Sort By
+                </label>
+                <select 
+                  id="sortBy"
+                  value={sortBy} 
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm"
+                >
+                  <option value="date">Date</option>
+                  <option value="amount">Amount</option>
+                  <option value="units">Units</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="sortOrder" className="block text-sm font-medium text-gray-700 mb-2">
+                  Order
+                </label>
+                <select 
+                  id="sortOrder"
+                  value={sortOrder} 
+                  onChange={(e) => setSortOrder(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm"
+                >
+                  <option value="desc">Newest First</option>
+                  <option value="asc">Oldest First</option>
+                </select>
+              </div>
             </div>
-            <div className="filter-group">
-              <label htmlFor="customerFilter">Customer:</label>
-              <select 
-                id="customerFilter"
-                value={customerFilter} 
-                onChange={(e) => setCustomerFilter(e.target.value)}
-                style={{ 
-                  padding: '8px 12px', 
-                  borderRadius: '8px', 
-                  border: '2px solid #e2e8f0',
-                  fontSize: '14px'
-                }}
-              >
-                <option value="">All (Self + Customers)</option>
-                <option value="self">Self Only</option>
-                {customers.map(c => (
-                  <option key={c._id} value={c._id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-            <div className="filter-group">
-              <label htmlFor="statusFilter">Status:</label>
-              <select 
-                id="statusFilter"
-                value={statusFilter} 
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={{ 
-                  padding: '8px 12px', 
-                  borderRadius: '8px', 
-                  border: '2px solid #e2e8f0',
-                  fontSize: '14px'
-                }}
-              >
-                <option value="">All Statuses</option>
-                <option value="paid">Paid</option>
-                <option value="pending">Pending</option>
-                <option value="overdue">Overdue</option>
-              </select>
-            </div>
-            <div className="filter-group">
-              <label htmlFor="dateFilter">Date Range:</label>
-              <select 
-                id="dateFilter"
-                value={dateFilter} 
-                onChange={(e) => setDateFilter(e.target.value)}
-                style={{ 
-                  padding: '8px 12px', 
-                  borderRadius: '8px', 
-                  border: '2px solid #e2e8f0',
-                  fontSize: '14px'
-                }}
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="week">Last 7 Days</option>
-                <option value="month">Last Month</option>
-                <option value="year">Last Year</option>
-              </select>
-            </div>
-            <div className="filter-group">
-              <label htmlFor="sortBy">Sort By:</label>
-              <select 
-                id="sortBy"
-                value={sortBy} 
-                onChange={(e) => setSortBy(e.target.value)}
-                style={{ 
-                  padding: '8px 12px', 
-                  borderRadius: '8px', 
-                  border: '2px solid #e2e8f0',
-                  fontSize: '14px'
-                }}
-              >
-                <option value="date">Date</option>
-                <option value="amount">Amount</option>
-                <option value="units">Units</option>
-              </select>
-            </div>
-            <div className="filter-group">
-              <label htmlFor="sortOrder">Order:</label>
-              <select 
-                id="sortOrder"
-                value={sortOrder} 
-                onChange={(e) => setSortOrder(e.target.value)}
-                style={{ 
-                  padding: '8px 12px', 
-                  borderRadius: '8px', 
-                  border: '2px solid #e2e8f0',
-                  fontSize: '14px'
-                }}
-              >
-                <option value="desc">Newest First</option>
-                <option value="asc">Oldest First</option>
-              </select>
-            </div>
-            <div className="filter-info">
-              Showing {filteredAndSortedRecords.length} of {records.length} records
+            <div className="text-sm text-center sm:text-left" style={{ color: '#37474F' }}>
+              Showing <span className="font-semibold">{filteredAndSortedRecords.length}</span> of <span className="font-semibold">{records.length}</span> records
             </div>
           </div>
 
           {/* Charts and Records - keeping existing code */}
           {/* ... (rest of the entries tab content from original UserDashboard.js) ... */}
           
-          <div className="records-section">
-            <h2>Your Records</h2>
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Customer</th>
-                    <th>Previous</th>
-                    <th>Current</th>
-                    <th>Units</th>
-                    <th>Amount</th>
-                    <th>Status</th>
-                    <th>Due Date</th>
-                    <th>Bill Image</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredAndSortedRecords.length === 0 ? (
-                    <tr>
-                      <td colSpan="10" className="empty-state">
-                        <div className="empty-content">
-                          <div className="empty-icon">📊</div>
-                          <h3>No records found</h3>
-                          <p>
-                            {records.length === 0 
-                              ? "Add your first electricity entry to get started!"
-                              : "Try adjusting your filters to see more results."
-                            }
-                          </p>
-                          {records.length === 0 && (
-                            <button onClick={() => setOpen(true)} className="empty-btn">
-                              Add First Entry
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredAndSortedRecords.map((r) => (
-                      <tr key={r._id} className="record-row">
-                        <td>
-                          <div className="date-cell">
-                            <div className="date-main">{new Date(r.createdAt).toLocaleDateString()}</div>
-                            <div className="date-time">{new Date(r.createdAt).toLocaleTimeString()}</div>
-                          </div>
-                        </td>
-                        <td>{r.customer?.name || 'Self'}</td>
-                        <td>{r.previousReading}</td>
-                        <td>{r.currentReading}</td>
-                        <td>
-                          <span className="units-badge">{r.unitsConsumed} units</span>
-                        </td>
-                        <td>
-                          <span className="amount-badge">₹{r.totalAmount.toFixed(2)}</span>
-                        </td>
-                        <td>
-                          <span className={`status-badge status-${r.paymentStatus}`}>
-                            {r.paymentStatus}
-                          </span>
-                        </td>
-                        <td>
-                          {r.dueDate ? (
+          <div className="rounded-xl shadow-lg p-4 sm:p-6" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+            <h2 className="text-2xl font-bold mb-4 sm:mb-6" style={{ color: '#37474F' }}>Your Records</h2>
+            <div className="overflow-x-auto">
+              {filteredAndSortedRecords.length === 0 ? (
+                <div className="text-center py-12 sm:py-16">
+                  <div className="text-6xl sm:text-7xl mb-4">📊</div>
+                  <h3 className="text-xl sm:text-2xl font-bold mb-2" style={{ color: '#37474F' }}>No records found</h3>
+                  <p className="mb-6 text-sm sm:text-base" style={{ color: '#37474F', opacity: 0.8 }}>
+                    {records.length === 0 
+                      ? "Add your first electricity entry to get started!"
+                      : "Try adjusting your filters to see more results."
+                    }
+                  </p>
+                  {records.length === 0 && (
+                    <button 
+                      onClick={() => setOpen(true)} 
+                      className="text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
+                      style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)' }}
+                    >
+                        Add First Entry
+                      </button>
+                  )}
+                    </div>
+              ) : (
+                <>
+                  {/* Desktop Table */}
+                  <table className="hidden lg:table w-full">
+                    <thead>
+                      <tr style={{ backgroundColor: '#F5F5F5', borderBottom: '2px solid rgba(55, 71, 79, 0.2)' }}>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Customer</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Previous</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Current</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Units</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Amount</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Status</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Due Date</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Bill Image</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody style={{ borderTop: '1px solid rgba(55, 71, 79, 0.2)' }}>
+                      {filteredAndSortedRecords.map((r) => (
+                        <tr key={r._id} style={{ borderBottom: '1px solid rgba(55, 71, 79, 0.1)' }} className="hover:opacity-80 transition-opacity">
+                          <td className="px-4 py-3">
                             <div>
-                              <div>{new Date(r.dueDate).toLocaleDateString()}</div>
-                              {new Date(r.dueDate) < new Date() && r.paymentStatus !== 'paid' && (
-                                <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px' }}>
-                                  Overdue
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            <span style={{ color: '#999' }}>-</span>
-                          )}
-                        </td>
-                        <td>
-                          {r.billImage ? (
-                            <button 
-                              className="view-bill-btn"
-                              onClick={() => openImageModal(r.billImage, new Date(r.createdAt).toLocaleDateString())}
-                              title="View bill image"
-                            >
-                              <span className="btn-icon">📷</span>
-                              View
-                            </button>
-                          ) : (
-                            <span className="no-image">No image</span>
-                          )}
-                        </td>
-                        <td>
-                          <div className="action-buttons">
-                            <button
-                              className="action-btn edit"
+                              <div className="font-medium" style={{ color: '#37474F' }}>{new Date(r.createdAt).toLocaleDateString()}</div>
+                              <div className="text-xs" style={{ color: '#37474F', opacity: 0.6 }}>{new Date(r.createdAt).toLocaleTimeString()}</div>
+                      </div>
+                    </td>
+                          <td className="px-4 py-3 text-sm" style={{ color: '#37474F' }}>{r.customer?.name || 'Self'}</td>
+                          <td className="px-4 py-3 text-sm" style={{ color: '#37474F' }}>{r.previousReading}</td>
+                          <td className="px-4 py-3 text-sm" style={{ color: '#37474F' }}>{r.currentReading}</td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#B3E5FC', color: '#37474F' }}>
+                              {r.unitsConsumed} units
+                            </span>
+                    </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium" style={{ backgroundColor: '#81C784', color: '#F5F5F5' }}>
+                              ₹{r.totalAmount.toFixed(2)}
+                            </span>
+                    </td>
+                          <td className="px-4 py-3">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize" style={
+                              r.paymentStatus === 'paid' ? { backgroundColor: '#81C784', color: '#F5F5F5' } :
+                              r.paymentStatus === 'pending' ? { backgroundColor: '#FFE082', color: '#37474F' } :
+                              { backgroundColor: '#EF5350', color: '#F5F5F5' }
+                            }>
+                        {r.paymentStatus}
+                      </span>
+                    </td>
+                          <td className="px-4 py-3 text-sm" style={{ color: '#37474F' }}>
+                            {r.dueDate ? (
+                              <div>
+                                <div>{new Date(r.dueDate).toLocaleDateString()}</div>
+                                {new Date(r.dueDate) < new Date() && r.paymentStatus !== 'paid' && (
+                                  <div className="text-xs text-red-600 mt-1">Overdue</div>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                      {r.billImage ? (
+                        <button 
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+                                style={{ backgroundColor: '#F5F5F5', color: '#37474F' }}
+                          onClick={() => openImageModal(r.billImage, new Date(r.createdAt).toLocaleDateString())}
+                        >
+                                📷 View
+                        </button>
+                      ) : (
+                              <span className="text-gray-400 text-sm">No image</span>
+                      )}
+                    </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <button
+                              className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:shadow-md transition-all flex items-center gap-1"
+                              style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}
                               onClick={() => setEditModal({ open: true, record: r })}
-                              title="Edit entry"
                             >
-                              <span>✏️</span>
-                              Edit
+                              ✏️ Edit
                             </button>
                             {r.paymentStatus === 'paid' ? (
                               <button
-                                className="action-btn unpaid"
+                                className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:shadow-md transition-all flex items-center gap-1"
+                                style={{ background: 'linear-gradient(135deg, #FFD54F 0%, #FFC107 100%)' }}
                                 onClick={() => updatePaymentStatus(r._id, 'unpaid')}
-                                title="Mark as unpaid"
                               >
-                                <span>⏳</span>
-                                Unpaid
+                                ⏳ Unpaid
                               </button>
                             ) : (
                               <button
-                                className="action-btn paid"
+                                className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:shadow-md transition-all flex items-center gap-1"
+                                style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)' }}
                                 onClick={() => updatePaymentStatus(r._id, 'paid')}
-                                title="Mark as paid"
                               >
-                                <span>✅</span>
-                                Paid
+                                ✅ Paid
                               </button>
                             )}
+                            </div>
+                    </td>
+                  </tr>
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Mobile Cards */}
+                  <div className="lg:hidden space-y-4">
+                    {filteredAndSortedRecords.map((r) => (
+                      <div key={r._id} className="rounded-xl p-4" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.2)' }}>
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <div className="font-semibold" style={{ color: '#37474F' }}>{new Date(r.createdAt).toLocaleDateString()}</div>
+                            <div className="text-xs" style={{ color: '#37474F', opacity: 0.6 }}>{new Date(r.createdAt).toLocaleTimeString()}</div>
                           </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize" style={
+                            r.paymentStatus === 'paid' ? { backgroundColor: '#81C784', color: '#F5F5F5' } :
+                            r.paymentStatus === 'pending' ? { backgroundColor: '#FFE082', color: '#37474F' } :
+                            { backgroundColor: '#EF5350', color: '#F5F5F5' }
+                          }>
+                            {r.paymentStatus}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                          <div>
+                            <span style={{ color: '#37474F', opacity: 0.7 }}>Customer:</span>
+                            <span className="ml-2 font-medium" style={{ color: '#37474F' }}>{r.customer?.name || 'Self'}</span>
+                          </div>
+                          <div>
+                            <span style={{ color: '#37474F', opacity: 0.7 }}>Amount:</span>
+                            <span className="ml-2 font-semibold" style={{ color: '#4CAF50' }}>₹{r.totalAmount.toFixed(2)}</span>
+                          </div>
+                          <div>
+                            <span style={{ color: '#37474F', opacity: 0.7 }}>Units:</span>
+                            <span className="ml-2 font-medium" style={{ color: '#37474F' }}>{r.unitsConsumed}</span>
+                          </div>
+                          <div>
+                            <span style={{ color: '#37474F', opacity: 0.7 }}>Reading:</span>
+                            <span className="ml-2 font-medium" style={{ color: '#37474F' }}>{r.previousReading} → {r.currentReading}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
+                            style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}
+                            onClick={() => setEditModal({ open: true, record: r })}
+                          >
+                            ✏️ Edit
+                          </button>
+                          {r.paymentStatus === 'paid' ? (
+                            <button
+                              className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
+                              style={{ background: 'linear-gradient(135deg, #FFD54F 0%, #FFC107 100%)' }}
+                              onClick={() => updatePaymentStatus(r._id, 'unpaid')}
+                            >
+                              ⏳ Unpaid
+                            </button>
+                          ) : (
+                            <button
+                              className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
+                              style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)' }}
+                              onClick={() => updatePaymentStatus(r._id, 'paid')}
+                            >
+                              ✅ Paid
+                            </button>
+                          )}
+                          {r.billImage && (
+                            <button 
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
+                              style={{ backgroundColor: '#F5F5F5', color: '#37474F', border: '1px solid rgba(55, 71, 79, 0.2)' }}
+                              onClick={() => openImageModal(r.billImage, new Date(r.createdAt).toLocaleDateString())}
+                            >
+                              📷 View
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </>
       ) : activeTab === 'customers' ? (
         <>
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', justifyContent: 'flex-end' }}>
+          <div className="flex justify-end mb-6">
             <button 
-              className="add-entry-btn" 
+              className="text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 flex items-center gap-2"
+              style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)' }}
               onClick={() => setCustomerModal({ open: true, customer: null })}
             >
-              <span className="btn-icon">➕</span>
-              Add Customer
+              ➕ Add Customer
             </button>
           </div>
 
-          <div className="records-section">
-            <h2>Your Customers</h2>
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Meter Number</th>
-                    <th>Phone</th>
-                    <th>Email</th>
-                    <th>Address</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {customers.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="empty-state">
-                        <div className="empty-content">
-                          <div className="empty-icon">👥</div>
-                          <h3>No customers yet</h3>
-                          <p>Add your first customer to start tracking their electricity records!</p>
-                          <button onClick={() => setCustomerModal({ open: true, customer: null })} className="empty-btn">
-                            Add First Customer
-                          </button>
-                        </div>
-                      </td>
+          <div className="rounded-xl shadow-lg p-4 sm:p-6" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+            <h2 className="text-2xl font-bold mb-4 sm:mb-6" style={{ color: '#37474F' }}>Your Customers</h2>
+            {customers.length === 0 ? (
+              <div className="text-center py-12 sm:py-16">
+                <div className="text-6xl sm:text-7xl mb-4">👥</div>
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">No customers yet</h3>
+                <p className="mb-6 text-sm sm:text-base" style={{ color: '#37474F', opacity: 0.8 }}>Add your first customer to start tracking their electricity records!</p>
+                <button 
+                  onClick={() => setCustomerModal({ open: true, customer: null })} 
+                  className="bg-gradient-success text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
+                >
+                  Add First Customer
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="hidden lg:table w-full">
+                  <thead>
+                    <tr style={{ backgroundColor: '#F5F5F5', borderBottom: '2px solid rgba(55, 71, 79, 0.2)' }}>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Meter Number</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Phone</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Email</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Address</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase" style={{ color: '#37474F' }}>Actions</th>
                     </tr>
-                  ) : (
-                    customers.map((customer) => (
-                      <tr key={customer._id} className="record-row">
-                        <td style={{ fontWeight: '600' }}>{customer.name}</td>
-                        <td>{customer.meterNumber}</td>
-                        <td>{customer.phone}</td>
-                        <td>{customer.email || '-'}</td>
-                        <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={customer.address}>
+                  </thead>
+                  <tbody style={{ borderTop: '1px solid rgba(55, 71, 79, 0.2)' }}>
+                    {customers.map((customer) => (
+                      <tr key={customer._id} style={{ borderBottom: '1px solid rgba(55, 71, 79, 0.1)' }} className="hover:opacity-80 transition-opacity">
+                        <td className="px-4 py-3 font-semibold" style={{ color: '#37474F' }}>{customer.name}</td>
+                        <td className="px-4 py-3 text-sm" style={{ color: '#37474F' }}>{customer.meterNumber}</td>
+                        <td className="px-4 py-3 text-sm" style={{ color: '#37474F' }}>{customer.phone}</td>
+                        <td className="px-4 py-3 text-sm" style={{ color: '#37474F' }}>{customer.email || '-'}</td>
+                        <td className="px-4 py-3 text-sm max-w-xs truncate" style={{ color: '#37474F' }} title={customer.address}>
                           {customer.address}
                         </td>
-                        <td>
-                          <div className="action-buttons">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
                             <button
-                              className="action-btn edit"
+                              className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:shadow-md transition-all flex items-center gap-1"
+                              style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}
                               onClick={() => setCustomerModal({ open: true, customer })}
-                              title="Edit customer"
                             >
-                              <span>✏️</span>
-                              Edit
+                              ✏️ Edit
                             </button>
                             <button
-                              className="action-btn"
+                              className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:shadow-md transition-all flex items-center gap-1"
+                              style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}
                               onClick={() => setShareModal({ open: true, customer })}
-                              title="Share customer summary"
                             >
-                              <span>📤</span>
-                              Share
+                              📤 Share
                             </button>
                             <button
-                              className="action-btn unpaid"
+                              className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:shadow-md transition-all flex items-center gap-1"
+                              style={{ background: 'linear-gradient(135deg, #FFD54F 0%, #FFC107 100%)' }}
                               onClick={() => deleteCustomer(customer._id)}
-                              title="Delete customer"
                             >
-                              <span>🗑️</span>
-                              Delete
+                              🗑️ Delete
                             </button>
                           </div>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
+                    ))}
+            </tbody>
+          </table>
+                <div className="lg:hidden space-y-4">
+                  {customers.map((customer) => (
+                    <div key={customer._id} className="rounded-xl p-4" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.2)' }}>
+                      <div className="font-semibold text-lg mb-3" style={{ color: '#37474F' }}>{customer.name}</div>
+                      <div className="space-y-2 text-sm mb-4">
+                        <div><span style={{ color: '#37474F', opacity: 0.7 }}>Meter:</span> <span className="font-medium" style={{ color: '#37474F' }}>{customer.meterNumber}</span></div>
+                        <div><span style={{ color: '#37474F', opacity: 0.7 }}>Phone:</span> <span className="font-medium" style={{ color: '#37474F' }}>{customer.phone}</span></div>
+                        <div><span style={{ color: '#37474F', opacity: 0.7 }}>Email:</span> <span className="font-medium" style={{ color: '#37474F' }}>{customer.email || '-'}</span></div>
+                        <div><span style={{ color: '#37474F', opacity: 0.7 }}>Address:</span> <span className="font-medium" style={{ color: '#37474F' }}>{customer.address}</span></div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
+                          style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}
+                          onClick={() => setCustomerModal({ open: true, customer })}
+                        >
+                          ✏️ Edit
+                        </button>
+                        <button
+                          className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
+                          style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}
+                          onClick={() => setShareModal({ open: true, customer })}
+                        >
+                          📤 Share
+                        </button>
+                        <button
+                          className="text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1"
+                          style={{ background: 'linear-gradient(135deg, #FFD54F 0%, #FFC107 100%)' }}
+                          onClick={() => deleteCustomer(customer._id)}
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+        </div>
+      </div>
+            )}
+          </div>
+        </>
+      ) : activeTab === 'payments' ? (
+        <>
+          <div className="rounded-xl shadow-lg p-4 sm:p-6" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+            <h2 className="text-2xl font-bold mb-4 sm:mb-6" style={{ color: '#37474F' }}>💳 Payment Requests</h2>
+            <p className="mb-6 text-sm sm:text-base" style={{ color: '#37474F', opacity: 0.8 }}>
+              Review and approve payment screenshots submitted by your customers.
+            </p>
+
+            {paymentsLoading ? (
+              <div className="text-center py-12">
+                <div className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mx-auto mb-4" style={{ borderColor: '#87CEEB' }}></div>
+                <p style={{ color: '#37474F', opacity: 0.7 }}>Loading payment requests...</p>
+              </div>
+            ) : pendingPayments.length === 0 ? (
+              <div className="text-center py-12 sm:py-16">
+                <div className="text-6xl sm:text-7xl mb-4">💳</div>
+                <h3 className="text-xl sm:text-2xl font-bold mb-2" style={{ color: '#37474F' }}>No Pending Payments</h3>
+                <p className="mb-6 text-sm sm:text-base" style={{ color: '#37474F', opacity: 0.8 }}>
+                  All payment requests have been processed.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {pendingPayments.map((payment) => {
+                  const apiUrl = process.env.NODE_ENV === 'production' 
+                    ? (process.env.REACT_APP_API_URL || '') 
+                    : 'http://localhost:5000';
+                  const imageUrl = payment.paymentScreenshot?.startsWith('http') 
+                    ? payment.paymentScreenshot 
+                    : `${apiUrl}${payment.paymentScreenshot}`;
+                  
+                  return (
+                    <div 
+                      key={payment._id} 
+                      className="rounded-xl p-4 sm:p-6 shadow-lg border" 
+                      style={{ backgroundColor: '#FFFFFF', borderColor: 'rgba(55, 71, 79, 0.2)' }}
+                    >
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        {/* Payment Image */}
+                        <div className="flex-shrink-0">
+                          <div 
+                            className="rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                            style={{ width: '150px', height: '150px', backgroundColor: '#F5F5F5' }}
+                            onClick={() => {
+                              setImageModal({ 
+                                open: true, 
+                                imageUrl: imageUrl,
+                                imageAlt: `Payment screenshot for ${payment.customer?.name || 'Customer'}` 
+                              });
+                            }}
+                          >
+                            <img 
+                              src={imageUrl} 
+                              alt="Payment screenshot"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                if (e.target.nextSibling) {
+                                  e.target.nextSibling.style.display = 'flex';
+                                }
+                              }}
+                            />
+                            <div 
+                              className="w-full h-full items-center justify-center text-4xl"
+                              style={{ display: 'none', backgroundColor: '#F5F5F5' }}
+                            >
+                              📷
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Payment Details */}
+                        <div className="flex-1">
+                          <div className="mb-4">
+                            <h3 className="text-lg font-bold mb-2" style={{ color: '#37474F' }}>
+                              {payment.customer?.name || 'Self'}
+                            </h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+                              <div>
+                                <span style={{ color: '#37474F', opacity: 0.7 }}>Meter Number:</span>
+                                <span className="ml-2 font-medium" style={{ color: '#37474F' }}>
+                                  {payment.customer?.meterNumber || payment.meterNumber}
+                                </span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#37474F', opacity: 0.7 }}>Phone:</span>
+                                <span className="ml-2 font-medium" style={{ color: '#37474F' }}>
+                                  {payment.customer?.phone || '-'}
+                                </span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#37474F', opacity: 0.7 }}>Amount:</span>
+                                <span className="ml-2 font-semibold" style={{ color: '#4CAF50' }}>
+                                  ₹{payment.totalAmount?.toFixed(2) || '0.00'}
+                                </span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#37474F', opacity: 0.7 }}>Submitted:</span>
+                                <span className="ml-2 font-medium" style={{ color: '#37474F' }}>
+                                  {payment.paymentSubmittedAt 
+                                    ? new Date(payment.paymentSubmittedAt).toLocaleString()
+                                    : '-'}
+                                </span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#37474F', opacity: 0.7 }}>Record Date:</span>
+                                <span className="ml-2 font-medium" style={{ color: '#37474F' }}>
+                                  {new Date(payment.createdAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <div>
+                                <span style={{ color: '#37474F', opacity: 0.7 }}>Status:</span>
+                                <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize" style={
+                                  payment.paymentStatus === 'paid' ? { backgroundColor: '#81C784', color: '#F5F5F5' } :
+                                  payment.paymentStatus === 'pending' ? { backgroundColor: '#FFE082', color: '#37474F' } :
+                                  { backgroundColor: '#EF5350', color: '#F5F5F5' }
+                                }>
+                                  {payment.paymentStatus}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex flex-wrap gap-3">
+                            <button
+                              onClick={() => handleApprovePayment(payment._id)}
+                              className="px-4 py-2 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 flex items-center gap-2"
+                              style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)', color: 'white' }}
+                            >
+                              ✅ Approve Payment
+                            </button>
+                            <button
+                              onClick={() => handleRejectPayment(payment._id)}
+                              className="px-4 py-2 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 flex items-center gap-2"
+                              style={{ background: 'linear-gradient(135deg, #FFD54F 0%, #FFC107 100%)', color: '#37474F' }}
+                            >
+                              ❌ Reject Payment
+                            </button>
+                            <button
+                              onClick={() => {
+                                setImageModal({ 
+                                  open: true, 
+                                  imageUrl: imageUrl,
+                                  imageAlt: `Payment screenshot for ${payment.customer?.name || 'Customer'}` 
+                                });
+                              }}
+                              className="px-4 py-2 rounded-lg font-semibold text-sm shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 flex items-center gap-2"
+                              style={{ backgroundColor: '#F5F5F5', color: '#37474F', border: '1px solid rgba(55, 71, 79, 0.2)' }}
+                            >
+                              👁️ View Image
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </>
       ) : activeTab === 'settings' ? (
         <>
-          <div className="dashboard-card">
-            <h2 style={{ marginBottom: '20px' }}>💳 Payment Settings</h2>
-            <p style={{ marginBottom: '24px', color: 'var(--text-secondary)' }}>
+          <div className="rounded-xl shadow-lg p-6 sm:p-8" style={{ backgroundColor: '#F5F5F5', border: '1px solid rgba(55, 71, 79, 0.1)' }}>
+            <h2 className="text-2xl sm:text-3xl font-bold mb-4" style={{ color: '#37474F' }}>💳 Payment Settings</h2>
+            <p className="mb-6 text-sm sm:text-base" style={{ color: '#37474F', opacity: 0.8 }}>
               Configure your UPI ID to receive payments from customers. This will be displayed when customers click "Pay Now" in the share view.
             </p>
 
@@ -775,7 +1145,6 @@ export default function UserDashboard() {
                 const updatedUser = data.data.user;
                 setUser(updatedUser);
                 setUpiId(updatedUser.upiId || '');
-                // Update stored user
                 const currentUser = getStoredUser();
                 if (currentUser) {
                   const newUser = { ...currentUser, ...updatedUser };
@@ -789,28 +1158,30 @@ export default function UserDashboard() {
                 setSettingsLoading(false);
               }
             }}>
-              <div className="form-group" style={{ marginBottom: '24px' }}>
-                <label htmlFor="upiId">UPI ID</label>
-                <div className="input-wrapper">
-                  <span className="input-icon">💳</span>
+              <div className="mb-6">
+                <label htmlFor="upiId" className="block text-sm font-medium text-gray-700 mb-2">
+                  UPI ID
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">💳</span>
                   <input
                     id="upiId"
                     type="text"
                     value={upiId}
                     onChange={(e) => setUpiId(e.target.value)}
                     placeholder="e.g., yourname@paytm, yourname@ybl, yourname@okaxis"
-                    style={{ fontSize: '16px' }}
+                    className="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-lg focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 text-base"
                   />
                 </div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', marginLeft: '40px' }}>
+                <p className="mt-2 text-xs text-gray-500 ml-0 sm:ml-11">
                   Enter your UPI ID (e.g., yourname@paytm, yourname@ybl, yourname@okaxis)
-                </div>
+                </p>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-end">
                 <button
                   type="button"
-                  className="secondary"
+                  className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-colors"
                   onClick={() => {
                     const currentUser = getStoredUser();
                     setUpiId(currentUser?.upiId || '');
@@ -821,18 +1192,19 @@ export default function UserDashboard() {
                 </button>
                 <button
                   type="submit"
-                  className="auth-submit"
+                  className="text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)' }}
                   disabled={settingsLoading}
                 >
                   {settingsLoading ? (
                     <>
-                      <span className="spinner-small"></span>
-                      Saving...
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Saving...</span>
                     </>
                   ) : (
                     <>
-                      <span className="btn-icon">💾</span>
-                      Save UPI ID
+                      <span>💾</span>
+                      <span>Save UPI ID</span>
                     </>
                   )}
                 </button>
@@ -840,16 +1212,9 @@ export default function UserDashboard() {
             </form>
 
             {upiId && (
-              <div style={{
-                marginTop: '24px',
-                padding: '20px',
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                borderRadius: '12px',
-                color: 'white',
-                textAlign: 'center'
-              }}>
-                <div style={{ fontSize: '14px', marginBottom: '8px', opacity: 0.9 }}>Your Current UPI ID:</div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', wordBreak: 'break-all', marginBottom: '12px' }}>
+              <div className="mt-6 p-5 sm:p-6 rounded-xl text-white text-center" style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)' }}>
+                <div className="text-sm mb-2 opacity-90">Your Current UPI ID:</div>
+                <div className="text-xl sm:text-2xl font-bold break-all mb-4">
                   {upiId}
                 </div>
                 <button
@@ -858,16 +1223,7 @@ export default function UserDashboard() {
                     navigator.clipboard.writeText(upiId);
                     toast.success('UPI ID copied to clipboard!');
                   }}
-                  style={{
-                    padding: '8px 16px',
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    border: '1px solid rgba(255, 255, 255, 0.3)',
-                    borderRadius: '8px',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    fontWeight: '500'
-                  }}
+                  className="px-4 py-2 bg-white/20 border border-white/30 rounded-lg text-white text-sm font-medium hover:bg-white/30 transition-colors"
                 >
                   📋 Copy UPI ID
                 </button>
@@ -921,40 +1277,60 @@ export default function UserDashboard() {
         customer={shareModal.customer}
       />
 
-      {/* Bill Image Modal */}
+      {/* Image Modal */}
       {imageModal.open && (
-        <div className="modal" onClick={closeImageModal}>
-          <div className="modal-content image-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Bill Image</h3>
-              <button className="close-btn" onClick={closeImageModal}>×</button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={closeImageModal}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'rgba(55, 71, 79, 0.2)' }}>
+              <h3 className="text-xl font-bold" style={{ color: '#37474F' }}>
+                {imageModal.imageAlt?.includes('Payment') ? 'Payment Screenshot' : 'Bill Image'}
+              </h3>
+              <button 
+                className="text-2xl font-bold hover:opacity-70 transition-opacity" 
+                style={{ color: '#37474F' }}
+                onClick={closeImageModal}
+              >
+                ×
+              </button>
             </div>
-            <div className="modal-body">
+            <div className="p-4">
               {imageLoading && (
-                <div className="image-loading">
-                  <div className="spinner"></div>
-                  <p>Loading image...</p>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <div className="w-12 h-12 border-4 border-t-transparent rounded-full animate-spin mb-4" style={{ borderColor: '#87CEEB' }}></div>
+                  <p style={{ color: '#37474F', opacity: 0.7 }}>Loading image...</p>
                 </div>
               )}
               <img 
                 src={imageModal.imageUrl} 
-                alt={imageModal.imageAlt}
+                alt={imageModal.imageAlt || 'Image'}
+                className="w-full h-auto rounded-lg"
                 style={{ display: imageLoading ? 'none' : 'block' }}
+                crossOrigin="anonymous"
                 onLoad={() => setImageLoading(false)}
                 onError={(e) => {
                   setImageLoading(false);
                   e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'block';
+                  if (e.target.nextSibling) {
+                    e.target.nextSibling.style.display = 'flex';
+                  }
                 }}
               />
-              <div className="image-error-modal" style={{ display: 'none' }}>
-                <p>Image could not be loaded</p>
-                <p>Please check if the image file exists and is accessible.</p>
+              <div className="hidden flex-col items-center justify-center py-12 text-center" style={{ color: '#37474F' }}>
+                <p className="text-lg font-semibold mb-2">Image could not be loaded</p>
+                <p className="text-sm opacity-70">Please check if the image file exists and is accessible.</p>
               </div>
             </div>
-            <div className="modal-footer">
-              <button className="secondary" onClick={closeImageModal}>Close</button>
+            <div className="flex items-center justify-end gap-3 p-4 border-t" style={{ borderColor: 'rgba(55, 71, 79, 0.2)' }}>
               <button 
+                className="px-4 py-2 rounded-lg font-semibold transition-colors"
+                style={{ backgroundColor: '#F5F5F5', color: '#37474F', border: '1px solid rgba(55, 71, 79, 0.2)' }}
+                onClick={closeImageModal}
+              >
+                Close
+              </button>
+              <button 
+                className="px-4 py-2 rounded-lg font-semibold text-white transition-all hover:shadow-lg"
+                style={{ background: 'linear-gradient(135deg, #87CEEB 0%, #64B5F6 100%)' }}
                 onClick={() => window.open(imageModal.imageUrl, '_blank')}
                 title="Open in new tab"
               >
@@ -964,6 +1340,7 @@ export default function UserDashboard() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
-}
+} 

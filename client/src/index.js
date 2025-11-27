@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import App from './App';
 import './styles.css';
+import './index.css';
 
 const container = document.getElementById('root');
 const root = createRoot(container);

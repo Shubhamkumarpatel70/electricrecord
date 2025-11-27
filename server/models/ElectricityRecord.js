@@ -104,17 +104,39 @@ const electricityRecordSchema = new mongoose.Schema({
       validator: function(value) {
         if (!value) return true;
         
-        // Get current date in local timezone (midnight)
+        // Get current date - compare in UTC to avoid timezone issues
         const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
         
         // Parse the due date value
         const due = new Date(value);
-        // Get date components in local timezone to avoid UTC issues
-        const dueDate = new Date(due.getFullYear(), due.getMonth(), due.getDate());
+        
+        // Get UTC date components for comparison
+        // This ensures consistent comparison regardless of server timezone
+        const dueYear = due.getUTCFullYear();
+        const dueMonth = due.getUTCMonth();
+        const dueDay = due.getUTCDate();
+        const dueDateUTC = new Date(Date.UTC(dueYear, dueMonth, dueDay));
         
         // Allow today or future dates (dueDate >= today)
-        return dueDate.getTime() >= today.getTime();
+        // Compare dates only, ignoring time
+        const isValid = dueDateUTC.getTime() >= todayUTC.getTime();
+        
+        if (!isValid) {
+          console.log('Due date validation failed:', {
+            provided: value,
+            dueDateUTC: dueDateUTC.toISOString(),
+            todayUTC: todayUTC.toISOString(),
+            dueYear,
+            dueMonth,
+            dueDay,
+            todayYear: todayUTC.getUTCFullYear(),
+            todayMonth: todayUTC.getUTCMonth(),
+            todayDay: todayUTC.getUTCDate()
+          });
+        }
+        
+        return isValid;
       },
       message: 'Due date must be today or in the future'
     }

@@ -55,17 +55,40 @@ router.post(
   '/',
   auth,
   upload.single('billImage'),
-  [
-    body('currentReading').isFloat({ min: 0 }),
-    body('dueDate').notEmpty(),
-  ],
+    [
+      body('currentReading')
+        .notEmpty().withMessage('Current reading is required')
+        .customSanitizer(value => {
+          // Convert string to number if needed
+          const num = typeof value === 'string' ? parseFloat(value) : value;
+          return isNaN(num) ? value : num;
+        })
+        .isFloat({ min: 0 }).withMessage('Current reading must be a valid number greater than or equal to 0'),
+      body('dueDate')
+        .notEmpty().withMessage('Due date is required')
+        .trim(),
+    ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      console.error('Validation errors:', errors.array());
+      console.error('Request body:', req.body);
+      const errorMessages = errors.array().map(e => e.msg || e.message || `${e.param}: ${e.msg || 'Invalid value'}`);
+      return res.status(400).json({ 
+        message: 'Validation failed',
+        errors: errorMessages,
+        details: errors.array()
+      });
     }
 
     try {
+      console.log('Creating record with data:', {
+        currentReading: req.body.currentReading,
+        previousReading: req.body.previousReading,
+        dueDate: req.body.dueDate,
+        customerId: req.body.customerId,
+        ratePerUnit: req.body.ratePerUnit
+      });
       let previousReading;
       const currentReading = Number(req.body.currentReading);
       const ratePerUnit = Number(req.body.ratePerUnit || 8);
@@ -120,9 +143,10 @@ router.post(
       
       const dateStr = req.body.dueDate;
       if (typeof dateStr === 'string' && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // Parse YYYY-MM-DD as local date (not UTC) - use noon to avoid timezone edge cases
+        // Parse YYYY-MM-DD and create as UTC date at midnight
+        // This ensures the date is stored correctly in MongoDB regardless of server timezone
         const [year, month, day] = dateStr.split('-').map(Number);
-        dueDate = new Date(year, month - 1, day, 12, 0, 0); // Use noon to avoid timezone edge cases
+        dueDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0)); // UTC midnight
       } else {
         dueDate = new Date(req.body.dueDate);
       }
@@ -130,6 +154,31 @@ router.post(
       // Validate the parsed date
       if (isNaN(dueDate.getTime())) {
         return res.status(400).json({ message: 'Invalid due date format' });
+      }
+      
+      // Additional validation: ensure due date is today or in the future (in UTC)
+      // Compare dates only, ignoring time components
+      const now = new Date();
+      const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+      const dueDateUTC = new Date(Date.UTC(dueDate.getUTCFullYear(), dueDate.getUTCMonth(), dueDate.getUTCDate()));
+      
+      console.log('Date validation:', {
+        provided: dateStr,
+        dueDateISO: dueDate.toISOString(),
+        dueDateUTC: dueDateUTC.toISOString(),
+        todayUTC: todayUTC.toISOString(),
+        comparison: dueDateUTC.getTime() >= todayUTC.getTime()
+      });
+      
+      if (dueDateUTC.getTime() < todayUTC.getTime()) {
+        return res.status(400).json({ 
+          message: 'Due date must be today or in the future',
+          details: {
+            provided: dateStr,
+            today: todayUTC.toISOString().split('T')[0],
+            dueDate: dueDateUTC.toISOString().split('T')[0]
+          }
+        });
       }
 
       const recordData = {
@@ -256,7 +305,7 @@ router.post('/:id/submit-payment', upload.single('paymentScreenshot'), async (re
     // Update record with payment screenshot
     record.paymentScreenshot = `/uploads/${req.file.filename}`;
     record.paymentSubmittedAt = new Date();
-    // Keep status as pending until admin/user verifies
+    // Keep status as pending until user verifies
     await record.save();
 
     res.json({ 
@@ -270,6 +319,91 @@ router.post('/:id/submit-payment', upload.single('paymentScreenshot'), async (re
     });
   } catch (err) {
     console.error('Error submitting payment:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Get pending payment submissions (for user to approve/reject)
+router.get('/pending-payments', auth, async (req, res) => {
+  try {
+    // Get records that have payment screenshots but status is not 'paid'
+    const pendingPayments = await ElectricityRecord.find({
+      user: req.user._id,
+      paymentScreenshot: { $exists: true, $ne: null },
+      paymentStatus: { $ne: 'paid' }
+    })
+      .populate('customer', 'name phone email meterNumber')
+      .sort({ paymentSubmittedAt: -1 });
+
+    res.json(pendingPayments);
+  } catch (err) {
+    console.error('Error fetching pending payments:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Approve payment (update status to paid)
+router.put('/:id/approve-payment', auth, async (req, res) => {
+  try {
+    const record = await ElectricityRecord.findOne({
+      _id: req.params.id,
+      user: req.user._id
+    }).populate('customer', 'name phone');
+
+    if (!record) {
+      return res.status(404).json({ message: 'Record not found' });
+    }
+
+    if (!record.paymentScreenshot) {
+      return res.status(400).json({ message: 'No payment screenshot found for this record' });
+    }
+
+    // Update payment status to paid
+    record.paymentStatus = 'paid';
+    record.paymentDate = new Date();
+    await record.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Payment approved successfully',
+      record 
+    });
+  } catch (err) {
+    console.error('Error approving payment:', err);
+    res.status(500).json({ message: 'Server error', error: err.message });
+  }
+});
+
+// Reject payment (remove screenshot and reset)
+router.put('/:id/reject-payment', auth, async (req, res) => {
+  try {
+    const record = await ElectricityRecord.findOne({
+      _id: req.params.id,
+      user: req.user._id
+    }).populate('customer', 'name phone');
+
+    if (!record) {
+      return res.status(404).json({ message: 'Record not found' });
+    }
+
+    // Remove payment screenshot and reset submission date
+    record.paymentScreenshot = null;
+    record.paymentSubmittedAt = null;
+    // Keep status as pending (or overdue if due date passed)
+    if (record.dueDate < new Date()) {
+      record.paymentStatus = 'overdue';
+    } else {
+      record.paymentStatus = 'pending';
+    }
+    await record.save();
+
+    res.json({ 
+      success: true, 
+      message: 'Payment rejected. Customer can submit a new payment screenshot.',
+      record 
+    });
+  } catch (err) {
+    console.error('Error rejecting payment:', err);
     res.status(500).json({ message: 'Server error', error: err.message });
   }
 });

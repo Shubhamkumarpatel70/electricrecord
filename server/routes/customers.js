@@ -190,7 +190,7 @@ router.post('/share/:token/verify', async (req, res) => {
     const customer = await Customer.findOne({ 
       shareToken: req.params.token,
       isActive: true
-    }).populate('addedBy', 'name email meterNumber');
+    }).populate('addedBy', 'name email meterNumber upiId');
 
     if (!customer) {
       return res.status(404).json({ message: 'Invalid share link' });
@@ -268,6 +268,12 @@ router.post('/share/:token/verify', async (req, res) => {
         email: customer.email,
         address: customer.address
       },
+      user: {
+        name: customer.addedBy.name,
+        email: customer.addedBy.email,
+        meterNumber: customer.addedBy.meterNumber,
+        upiId: customer.addedBy.upiId || null
+      },
       currentMonth: {
         units: currentMonthUnits,
         previousUnits: previousMonthUnits,
@@ -293,8 +299,8 @@ router.post('/share/:token/verify', async (req, res) => {
         paymentStatus: r.paymentStatus,
         paymentScreenshot: r.paymentScreenshot,
         paymentSubmittedAt: r.paymentSubmittedAt,
-        dueDate: r.dueDate,
         paymentDate: r.paymentDate,
+        dueDate: r.dueDate,
         remarks: r.remarks
       }))
     });

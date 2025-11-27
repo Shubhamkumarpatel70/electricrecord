@@ -49,6 +49,8 @@ export default function ShareView() {
       }
 
       setData(responseData);
+      console.log('ShareView data received:', responseData); // Debug log
+      console.log('UPI ID:', responseData.user?.upiId); // Debug log
       toast.success('Phone verified successfully!');
     } catch (err) {
       console.error('Error verifying phone:', err);
@@ -514,9 +516,9 @@ export default function ShareView() {
 
                                     {data?.user?.upiId ? (
                                       <div style={{ marginBottom: '20px' }}>
-                                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600' }}>UPI ID for Payment</label>
+                                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', color: '#37474F' }}>UPI ID for Payment</label>
                                         <div style={{
-                                          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                                          background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)',
                                           padding: '20px',
                                           borderRadius: '12px',
                                           textAlign: 'center',
@@ -551,12 +553,12 @@ export default function ShareView() {
                                     ) : (
                                       <div style={{
                                         padding: '15px',
-                                        background: '#fef3c7',
+                                        background: '#FFE082',
                                         borderRadius: '8px',
                                         marginBottom: '20px',
-                                        border: '1px solid #fbbf24'
+                                        border: '1px solid #FFD54F'
                                       }}>
-                                        <div style={{ color: '#92400e', fontSize: '14px' }}>
+                                        <div style={{ color: '#37474F', fontSize: '14px' }}>
                                           ⚠️ UPI ID not configured. Please contact the biller for payment details.
                                         </div>
                                       </div>
@@ -711,6 +713,7 @@ export default function ShareView() {
                       src={`${process.env.NODE_ENV === 'production' ? (process.env.REACT_APP_API_URL || '') : 'http://localhost:5000'}${imageModal.imageUrl}`}
                       alt="Payment screenshot"
                       style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: '8px' }}
+                      crossOrigin="anonymous"
                     />
                   </div>
                 </div>

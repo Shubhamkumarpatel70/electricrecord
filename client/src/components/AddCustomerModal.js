@@ -35,7 +35,7 @@ export default function AddCustomerModal({ open, onClose, onCreated, customer })
       setError('Name must be at least 2 characters');
       return false;
     }
-    if (!phone || !/^[\+]?[1-9][\d]{7,15}$/.test(phone)) {
+    if (!phone || !/^[+]?[1-9]\d{7,15}$/.test(phone)) {
       setError('Please enter a valid phone number');
       return false;
     }

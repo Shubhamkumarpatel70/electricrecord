@@ -9,6 +9,7 @@ export default function AddEntryModal({ open, onClose, onCreated, customers = []
   const [dueDate, setDueDate] = useState('');
   const [remarks, setRemarks] = useState('');
   const [file, setFile] = useState(null);
+  const [filePreview, setFilePreview] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState('pending');
   const [selectedCustomer, setSelectedCustomer] = useState('');
   const [error, setError] = useState('');
@@ -106,13 +107,27 @@ export default function AddEntryModal({ open, onClose, onCreated, customers = []
       setDueDate(''); 
       setRemarks(''); 
       setFile(null);
+      setFilePreview(null);
       setPaymentStatus('pending');
       setSelectedCustomer('');
       setHasPreviousRecord(false);
       toast.success('Entry created successfully!');
     } catch (err) {
       console.error('Error creating record:', err);
-      const errorMsg = err.response?.data?.message || 'Failed to create record';
+      console.error('Error response:', err.response?.data);
+      
+      // Handle validation errors
+      let errorMsg = 'Failed to create record';
+      if (err.response?.data) {
+        if (err.response.data.message) {
+          errorMsg = err.response.data.message;
+        } else if (err.response.data.errors && Array.isArray(err.response.data.errors)) {
+          errorMsg = err.response.data.errors.join(', ');
+        } else if (err.response.data.error) {
+          errorMsg = err.response.data.error;
+        }
+      }
+      
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -122,192 +137,322 @@ export default function AddEntryModal({ open, onClose, onCreated, customers = []
 
   if (!open) return null;
   return (
-    <div className="modal" onClick={onClose}>
-      <div className="modal-content entry-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>📊 Add New Electricity Entry</h3>
-          <button className="close-btn" onClick={onClose}>×</button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div 
+        className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto" 
+        onClick={(e) => e.stopPropagation()}
+        style={{ border: '1px solid rgba(55, 71, 79, 0.1)' }}
+      >
+        <div className="sticky top-0 flex items-center justify-between p-4 sm:p-6 border-b" style={{ backgroundColor: '#F5F5F5', borderColor: 'rgba(55, 71, 79, 0.2)' }}>
+          <h3 className="text-xl sm:text-2xl font-bold" style={{ color: '#37474F' }}>📊 Add New Electricity Entry</h3>
+          <button 
+            className="text-2xl font-bold hover:opacity-70 transition-opacity w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200"
+            style={{ color: '#37474F' }}
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
         
-        <form onSubmit={submit} className="entry-form">
+        <form onSubmit={submit} className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {customers.length > 0 && (
-            <div className="form-group">
-              <label>Customer (Optional - Leave empty for self)</label>
-              <div className="input-wrapper">
-                <span className="input-icon">👤</span>
-                <select
-                  value={selectedCustomer}
-                  onChange={(e) => {
-                    setSelectedCustomer(e.target.value);
-                    setPrevious('');
-                    setHasPreviousRecord(false);
-                  }}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '2px solid #e2e8f0',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    background: 'white'
-                  }}
-                >
-                  <option value="">Self</option>
-                  {customers.map(c => (
-                    <option key={c._id} value={c._id}>
-                      {c.name} ({c.meterNumber})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div>
+              <label className="block text-sm font-semibold mb-2" style={{ color: '#37474F' }}>
+                👤 Customer (Optional - Leave empty for self)
+              </label>
+              <select
+                value={selectedCustomer}
+                onChange={(e) => {
+                  setSelectedCustomer(e.target.value);
+                  setPrevious('');
+                  setHasPreviousRecord(false);
+                }}
+                className="w-full px-4 py-3 rounded-lg border-2 focus:outline-none focus:ring-2 transition-all"
+                style={{ 
+                  borderColor: '#e2e8f0',
+                  fontSize: '14px',
+                  backgroundColor: 'white'
+                }}
+              >
+                <option value="">Self</option>
+                {customers.map(c => (
+                  <option key={c._id} value={c._id}>
+                    {c.name} ({c.meterNumber})
+                  </option>
+                ))}
+              </select>
             </div>
           )}
-          <div className="form-row">
-            <div className="form-group">
-              <label>Previous Reading {hasPreviousRecord && '(Auto-filled - You can edit)'}</label>
-              <div className="input-wrapper">
-                <span className="input-icon">🔢</span>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold mb-2" style={{ color: '#37474F' }}>
+                🔢 Previous Reading {hasPreviousRecord && <span className="text-xs font-normal text-green-600">(Auto-filled)</span>}
+              </label>
+              <div className="relative">
                 <input 
                   type="number"
                   value={previous} 
                   onChange={(e) => setPrevious(e.target.value)}
-                  className={hasPreviousRecord ? '' : ''}
+                  className="w-full px-4 py-3 pl-12 rounded-lg border-2 focus:outline-none focus:ring-2 transition-all"
+                  style={{ 
+                    borderColor: hasPreviousRecord ? '#4CAF50' : '#e2e8f0',
+                    fontSize: '14px',
+                    backgroundColor: hasPreviousRecord ? '#F1F8F4' : 'white'
+                  }}
                   placeholder="Enter previous reading"
                   min="0"
                   required
                 />
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">🔢</span>
               </div>
               {hasPreviousRecord && (
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
-                  Auto-filled from last record. You can edit if needed.
-                </div>
+                <p className="text-xs mt-1" style={{ color: '#4CAF50' }}>
+                  ✓ Auto-filled from last record. You can edit if needed.
+                </p>
               )}
               {!hasPreviousRecord && (
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                <p className="text-xs mt-1" style={{ color: '#666' }}>
                   No previous record found. Please enter manually.
-                </div>
+                </p>
               )}
             </div>
-            <div className="form-group">
-              <label>Current Reading</label>
-              <div className="input-wrapper">
-                <span className="input-icon">📈</span>
+            
+            <div>
+              <label className="block text-sm font-semibold mb-2" style={{ color: '#37474F' }}>
+                📈 Current Reading
+              </label>
+              <div className="relative">
                 <input 
                   type="number" 
                   value={current} 
                   onChange={(e) => {
                     setCurrent(e.target.value);
-                    setError(''); // Clear error when user types
+                    setError('');
                   }} 
+                  className="w-full px-4 py-3 pl-12 rounded-lg border-2 focus:outline-none focus:ring-2 transition-all"
+                  style={{ 
+                    borderColor: error && current ? '#F44336' : '#e2e8f0',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
                   required 
                   min={previous ? Number(previous) + 1 : undefined}
                   placeholder="Enter current reading"
                 />
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">📈</span>
               </div>
+              {previous && current && Number(current) <= Number(previous) && (
+                <p className="text-xs mt-1" style={{ color: '#F44336' }}>
+                  ⚠️ Current reading must be greater than previous reading
+                </p>
+              )}
             </div>
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Rate Per Unit (₹)</label>
-              <div className="input-wrapper">
-                <span className="input-icon">💰</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold mb-2" style={{ color: '#37474F' }}>
+                💰 Rate Per Unit (₹)
+              </label>
+              <div className="relative">
                 <input 
                   type="number" 
                   step="0.01" 
                   value={ratePerUnit} 
                   onChange={(e) => setRatePerUnit(e.target.value)} 
+                  className="w-full px-4 py-3 pl-12 rounded-lg border-2 focus:outline-none focus:ring-2 transition-all"
+                  style={{ 
+                    borderColor: '#e2e8f0',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
                   placeholder="8.00"
                 />
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">💰</span>
               </div>
             </div>
-            <div className="form-group">
-              <label>Due Date</label>
-              <div className="input-wrapper">
-                <span className="input-icon">📅</span>
+            
+            <div>
+              <label className="block text-sm font-semibold mb-2" style={{ color: '#37474F' }}>
+                📅 Due Date
+              </label>
+              <div className="relative">
                 <input 
                   type="date" 
                   value={dueDate} 
                   onChange={(e) => setDueDate(e.target.value)} 
+                  className="w-full px-4 py-3 pl-12 rounded-lg border-2 focus:outline-none focus:ring-2 transition-all"
+                  style={{ 
+                    borderColor: '#e2e8f0',
+                    fontSize: '14px',
+                    backgroundColor: 'white'
+                  }}
                   required 
                 />
+                <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-xl">📅</span>
               </div>
             </div>
           </div>
 
           <div className="form-group">
-            <label>Bill Image</label>
-            <div className="file-input-wrapper">
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={(e) => setFile(e.target.files[0])}
-                id="bill-image"
-                className="file-input"
-              />
-              <label htmlFor="bill-image" className="file-input-label">
-                <span className="file-icon">📷</span>
-                <span className="file-text">
-                  {file ? file.name : 'Choose bill image'}
-                </span>
-              </label>
+            <label>Bill Image (Optional)</label>
+            <div className="space-y-3">
+              <div className="file-input-wrapper">
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={(e) => {
+                    const selectedFile = e.target.files[0];
+                    setFile(selectedFile);
+                    if (selectedFile) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        setFilePreview(reader.result);
+                      };
+                      reader.readAsDataURL(selectedFile);
+                    } else {
+                      setFilePreview(null);
+                    }
+                  }}
+                  id="bill-image"
+                  className="file-input"
+                />
+                <label htmlFor="bill-image" className="file-input-label cursor-pointer">
+                  <span className="file-icon">📷</span>
+                  <span className="file-text">
+                    {file ? file.name : 'Choose bill image'}
+                  </span>
+                </label>
+              </div>
+              {filePreview && (
+                <div className="mt-3 rounded-lg overflow-hidden border-2" style={{ borderColor: '#87CEEB' }}>
+                  <div className="relative">
+                    <img 
+                      src={filePreview} 
+                      alt="Bill preview" 
+                      className="w-full h-auto max-h-48 object-contain"
+                      style={{ backgroundColor: '#F5F5F5' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFile(null);
+                        setFilePreview(null);
+                        const fileInput = document.getElementById('bill-image');
+                        if (fileInput) fileInput.value = '';
+                      }}
+                      className="absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg hover:shadow-xl transition-all"
+                      style={{ backgroundColor: '#F44336' }}
+                      title="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="p-2 text-xs text-center" style={{ backgroundColor: '#F5F5F5', color: '#37474F' }}>
+                    {file.name} ({(file.size / 1024).toFixed(2)} KB)
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="form-group">
-            <label>Remarks (Optional)</label>
-            <div className="input-wrapper">
-              <span className="input-icon">💬</span>
-              <input 
+          <div>
+            <label className="block text-sm font-semibold mb-2" style={{ color: '#37474F' }}>
+              💬 Remarks (Optional)
+            </label>
+            <div className="relative">
+              <textarea
                 value={remarks} 
                 onChange={(e) => setRemarks(e.target.value)} 
                 placeholder="Any additional notes..."
+                rows="3"
+                className="w-full px-4 py-3 pl-12 rounded-lg border-2 focus:outline-none focus:ring-2 transition-all resize-none"
+                style={{ 
+                  borderColor: '#e2e8f0',
+                  fontSize: '14px',
+                  backgroundColor: 'white'
+                }}
               />
+              <span className="absolute left-3 top-3 text-xl">💬</span>
             </div>
           </div>
 
-          <div className="form-group">
-            <label>Payment Status</label>
-            <div className="payment-status-buttons">
+          <div>
+            <label className="block text-sm font-semibold mb-3" style={{ color: '#37474F' }}>
+              Payment Status
+            </label>
+            <div className="flex gap-3">
               <button
                 type="button"
                 onClick={() => setPaymentStatus('paid')}
-                className={`payment-status-btn paid ${paymentStatus === 'paid' ? 'active' : ''}`}
+                className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
+                  paymentStatus === 'paid' 
+                    ? 'shadow-lg scale-105' 
+                    : 'opacity-70 hover:opacity-100'
+                }`}
+                style={paymentStatus === 'paid' 
+                  ? { background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)', color: 'white' }
+                  : { backgroundColor: '#F5F5F5', color: '#37474F', border: '2px solid #4CAF50' }
+                }
               >
-                <span>✅</span>
-                Paid
+                <span className="text-xl">✅</span>
+                <span>Paid</span>
               </button>
               <button
                 type="button"
                 onClick={() => setPaymentStatus('pending')}
-                className={`payment-status-btn pending ${paymentStatus === 'pending' ? 'active' : ''}`}
+                className={`flex-1 px-4 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
+                  paymentStatus === 'pending' 
+                    ? 'shadow-lg scale-105' 
+                    : 'opacity-70 hover:opacity-100'
+                }`}
+                style={paymentStatus === 'pending' 
+                  ? { background: 'linear-gradient(135deg, #FFD54F 0%, #FFC107 100%)', color: '#37474F' }
+                  : { backgroundColor: '#F5F5F5', color: '#37474F', border: '2px solid #FFD54F' }
+                }
               >
-                <span>⏳</span>
-                Unpaid
+                <span className="text-xl">⏳</span>
+                <span>Unpaid</span>
               </button>
             </div>
           </div>
 
           {error && (
-            <div className="error-message">
-              <span className="error-icon">⚠️</span>
-              {error}
+            <div className="p-4 rounded-lg flex items-start gap-3" style={{ backgroundColor: '#FFEBEE', border: '1px solid #F44336' }}>
+              <span className="text-2xl">⚠️</span>
+              <div>
+                <p className="font-semibold" style={{ color: '#D32F2F' }}>Error</p>
+                <p className="text-sm mt-1" style={{ color: '#37474F' }}>{error}</p>
+              </div>
             </div>
           )}
 
-          <div className="modal-footer">
-            <button type="button" className="secondary" onClick={onClose} disabled={loading}>
+          <div className="flex gap-3 pt-4 border-t" style={{ borderColor: 'rgba(55, 71, 79, 0.2)' }}>
+            <button 
+              type="button" 
+              onClick={onClose} 
+              disabled={loading}
+              className="flex-1 px-6 py-3 rounded-lg font-semibold transition-all hover:shadow-lg"
+              style={{ backgroundColor: '#F5F5F5', color: '#37474F', border: '2px solid rgba(55, 71, 79, 0.2)' }}
+            >
               Cancel
             </button>
-            <button type="submit" className="auth-submit" disabled={loading}>
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="flex-1 px-6 py-3 rounded-lg font-semibold text-white transition-all hover:shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2 disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)' }}
+            >
               {loading ? (
                 <>
-                  <span className="spinner-small"></span>
-                  Saving...
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Saving...</span>
                 </>
               ) : (
                 <>
-                  <span className="btn-icon">💾</span>
-                  Save Entry
+                  <span className="text-xl">💾</span>
+                  <span>Save Entry</span>
                 </>
               )}
             </button>
